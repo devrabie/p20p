@@ -201,52 +201,66 @@ $transactions = $stmt->fetchAll();
             <a href="reports.php" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded font-bold flex items-center gap-2 shadow-lg transition"><i data-lucide="calendar-days"></i> التقارير والتحليل</a>
         </header>
 
-        <!-- الصف الأول: إحصائيات الربح والمخزون -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div class="glass-card p-5 border-r-4 border-emerald-500"><span class="text-slate-400 text-[10px] font-bold block mb-1 uppercase">صافي الربح (YER)</span><h3 class="text-lg md:text-xl font-black text-emerald-400 tabular-nums"><?php echo number_format($total_profit_yer_all, 2); ?></h3></div>
-            <div class="glass-card p-5 border-r-4 border-blue-500"><span class="text-slate-400 text-[10px] font-bold block mb-1 uppercase">صافي الربح ($)</span><h3 class="text-lg md:text-xl font-black text-blue-400 tabular-nums">$<?php echo number_format($total_profit_usd_all, 2); ?></h3></div>
+        <!-- الصف الرئيسي: المخزون وربح اليوم -->
+        <div class="grid grid-cols-2 gap-4 mb-6">
             <div class="glass-card p-5 border-r-4 border-yellow-500 shadow-xl"><span class="text-slate-400 text-[10px] font-bold block mb-1 uppercase italic tracking-tighter">المخزون المتوفر (Stock)</span><h3 class="text-lg md:text-xl font-black text-yellow-500 tabular-nums"><?php echo number_format($remaining_stock, 2); ?></h3></div>
-            <div class="glass-card p-5 border-r-4 border-purple-500"><span class="text-slate-400 text-[10px] font-bold block mb-1 uppercase italic">متوسط الشراء (WAC)</span><h3 class="text-lg md:text-xl font-black text-purple-400 tabular-nums"><?php echo number_format($avg_buy_price, 2); ?></h3></div>
-        </div>
-
-        <!-- الصف الثاني: فوليوم اليوم -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div class="glass-card p-4 bg-blue-500/5 border-l-4 border-blue-500"><span class="text-[10px] text-blue-400 font-bold block italic">شراء اليوم (Vol)</span><h3 class="text-lg font-black tabular-nums"><?php echo number_format($daily_buy_vol, 2); ?></h3></div>
-            <div class="glass-card p-4 bg-green-500/5 border-l-4 border-green-500"><span class="text-[10px] text-green-400 font-bold block italic">بيع اليوم (Vol)</span><h3 class="text-lg font-black tabular-nums"><?php echo number_format($daily_sell_vol, 2); ?></h3></div>
-            <div class="glass-card p-4 bg-slate-500/5 border-l-4 border-slate-500"><span class="text-[10px] text-slate-400 font-bold block italic">وارد اليوم (YER)</span><h3 class="text-lg font-black tabular-nums"><?php echo number_format($daily_in_money, 2); ?></h3></div>
-            <div class="glass-card p-4 bg-slate-500/5 border-l-4 border-slate-500"><span class="text-[10px] text-slate-400 font-bold block italic">صادر اليوم (YER)</span><h3 class="text-lg font-black tabular-nums"><?php echo number_format($daily_out_money, 2); ?></h3></div>
-        </div>
-
-        <!-- الصف الثالث: أرباح ورسوم اليوم -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-            <div class="glass-card p-4 bg-emerald-500/10 border border-emerald-500/20"><span class="text-[9px] text-emerald-500 font-black uppercase mb-1 block">ربح اليوم (YER)</span><h3 class="text-lg font-black text-emerald-400 tabular-nums"><?php echo number_format($daily_profit_yer_val, 2); ?></h3></div>
             <div class="glass-card p-4 bg-blue-500/10 border border-blue-500/20"><span class="text-[9px] text-blue-500 font-black uppercase mb-1 block">ربح اليوم ($)</span><h3 class="text-lg font-black text-blue-400 tabular-nums">$<?php echo number_format($daily_profit_usd_val, 2); ?></h3></div>
-            <div class="glass-card p-4 bg-rose-500/10 border border-rose-500/20"><span class="text-[9px] text-rose-500 font-black uppercase mb-1 block">رسوم اليوم (USDT)</span><h3 class="text-lg font-black text-rose-400 tabular-nums"><?php echo number_format($daily_fees_usdt_val, 2); ?></h3></div>
-            <div class="glass-card p-4 bg-purple-500/10 border border-purple-500/20"><span class="text-[9px] text-purple-500 font-black uppercase mb-1 block">رسوم اليوم (YER)</span><h3 class="text-lg font-black text-purple-400 tabular-nums"><?php echo number_format($daily_fees_yer_val, 2); ?></h3></div>
         </div>
 
-<!-- قسم الرسم البياني مع شريط تمرير -->
-<div id="chart-section" class="glass-card p-6 mb-10">
-    <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-        <h2 class="text-sm font-black text-slate-300 uppercase tracking-widest italic flex items-center gap-2">
-            <i data-lucide="bar-chart-3" class="text-emerald-500"></i> تحليل الأداء 
-            <span class="text-[10px] text-slate-500 font-normal">(<?php echo strtoupper($range); ?>)</span>
-        </h2>
-        
-        <div class="flex bg-slate-900/80 p-1 rounded border border-slate-700">
-            <a href="?range=day#chart-section" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='day'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">اليوم</a>
-            <a href="?range=week#chart-section" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='week'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">أسبوعي</a>
-            <a href="?range=month#chart-section" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='month'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">شهري</a>
+        <div class="mb-10 text-center">
+            <button onclick="openReportsModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-4 rounded-xl font-black flex items-center gap-3 shadow-xl transition mx-auto italic uppercase tracking-widest border-b-4 border-emerald-800 active:border-b-0 active:translate-y-1">
+                <i data-lucide="pie-chart"></i> عرض التقارير والإحصائيات
+            </button>
         </div>
-    </div>
 
-    <!-- حاوية التمرير الأفقي المحدثة -->
-    <div class="overflow-x-auto custom-scrollbar pb-4">
-        <div id="chart-scroll-container" style="height: 300px; min-width: 100%;">
-            <canvas id="profitChart"></canvas>
+    <!-- نافذة التقارير المنبثقة -->
+    <div id="reportsModal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-[500] overflow-y-auto">
+        <div class="glass-card w-full max-w-5xl p-6 md:p-10 border-2 border-emerald-500/30 shadow-2xl my-auto">
+            <div class="flex justify-between items-center mb-8 pb-4 border-b border-slate-800">
+                <h2 class="text-xl font-black text-emerald-500 flex items-center gap-3 italic uppercase tracking-widest"><i data-lucide="bar-chart-horizontal"></i> الإحصائيات التفصيلية</h2>
+                <button onclick="closeReportsModal()" class="bg-slate-800 p-2 rounded-lg text-white hover:bg-rose-500 transition"><i data-lucide="x"></i></button>
+            </div>
+
+            <!-- شبكة البطاقات داخل النافذة -->
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+                <div class="glass-card p-4 border-r-4 border-blue-500 bg-slate-900/40"><span class="text-slate-400 text-[9px] font-bold block mb-1 uppercase">صافي الربح ($)</span><h3 class="text-sm font-black text-blue-400 tabular-nums">$<?php echo number_format($total_profit_usd_all, 2); ?></h3></div>
+                <div class="glass-card p-4 border-r-4 border-emerald-500 bg-slate-900/40"><span class="text-slate-400 text-[9px] font-bold block mb-1 uppercase">صافي الربح (YER)</span><h3 class="text-sm font-black text-emerald-400 tabular-nums"><?php echo number_format($total_profit_yer_all, 2); ?></h3></div>
+                <div class="glass-card p-4 border-r-4 border-purple-500 bg-slate-900/40"><span class="text-slate-400 text-[9px] font-bold block mb-1 uppercase italic">متوسط الشراء (WAC)</span><h3 class="text-sm font-black text-purple-400 tabular-nums"><?php echo number_format($avg_buy_price, 2); ?></h3></div>
+                <div class="glass-card p-4 border-l-4 border-blue-500 bg-slate-900/40"><span class="text-[9px] text-blue-400 font-bold block italic uppercase">شراء اليوم (Vol)</span><h3 class="text-sm font-black tabular-nums"><?php echo number_format($daily_buy_vol, 2); ?></h3></div>
+                <div class="glass-card p-4 border-l-4 border-green-500 bg-slate-900/40"><span class="text-[9px] text-green-400 font-bold block italic uppercase">بيع اليوم (Vol)</span><h3 class="text-sm font-black tabular-nums"><?php echo number_format($daily_sell_vol, 2); ?></h3></div>
+
+                <div class="glass-card p-4 border-l-4 border-slate-600 bg-slate-900/40"><span class="text-[9px] text-slate-400 font-bold block italic uppercase">وارد اليوم (YER)</span><h3 class="text-sm font-black tabular-nums"><?php echo number_format($daily_in_money, 2); ?></h3></div>
+                <div class="glass-card p-4 border-l-4 border-slate-600 bg-slate-900/40"><span class="text-[9px] text-slate-400 font-bold block italic uppercase">صادر اليوم (YER)</span><h3 class="text-sm font-black tabular-nums"><?php echo number_format($daily_out_money, 2); ?></h3></div>
+                <div class="glass-card p-4 bg-emerald-500/10 border border-emerald-500/20"><span class="text-[9px] text-emerald-500 font-black uppercase mb-1 block">ربح اليوم (YER)</span><h3 class="text-sm font-black text-emerald-400 tabular-nums"><?php echo number_format($daily_profit_yer_val, 2); ?></h3></div>
+                <div class="glass-card p-4 bg-rose-500/10 border border-rose-500/20"><span class="text-[9px] text-rose-500 font-black uppercase mb-1 block">رسوم اليوم (USDT)</span><h3 class="text-sm font-black text-rose-400 tabular-nums"><?php echo number_format($daily_fees_usdt_val, 2); ?></h3></div>
+                <div class="glass-card p-4 bg-purple-500/10 border border-purple-500/20"><span class="text-[9px] text-purple-500 font-black uppercase mb-1 block">رسوم اليوم (YER)</span><h3 class="text-sm font-black text-purple-400 tabular-nums"><?php echo number_format($daily_fees_yer_val, 2); ?></h3></div>
+            </div>
+
+            <!-- قسم الرسم البياني داخل النافذة -->
+            <div id="chart-section" class="bg-slate-900/60 p-6 rounded-xl border border-slate-800">
+                <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+                    <h2 class="text-sm font-black text-slate-300 uppercase tracking-widest italic flex items-center gap-2">
+                        <i data-lucide="bar-chart-3" class="text-emerald-500"></i> تحليل الأداء
+                        <span class="text-[10px] text-slate-500 font-normal">(<?php echo strtoupper($range); ?>)</span>
+                    </h2>
+
+                    <div class="flex bg-slate-900/80 p-1 rounded border border-slate-700">
+                        <a href="?range=day#reportsModal" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='day'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">اليوم</a>
+                        <a href="?range=week#reportsModal" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='week'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">أسبوعي</a>
+                        <a href="?range=month#reportsModal" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='month'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">شهري</a>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto custom-scrollbar pb-4">
+                    <div id="chart-scroll-container" style="height: 300px; min-width: 100%;">
+                        <canvas id="profitChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8 text-center"><button onclick="closeReportsModal()" class="bg-slate-800 text-white px-10 py-3 rounded-lg font-bold text-xs uppercase italic tracking-widest hover:bg-slate-700 transition">إغلاق النافذة</button></div>
         </div>
     </div>
-</div>
 
         <div id="form-section" class="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div class="lg:col-span-5 order-2 lg:order-1 text-right">
@@ -335,12 +349,15 @@ $transactions = $stmt->fetchAll();
 
         function showToast(msg) { const toast = document.getElementById('toast'); document.getElementById('toast-msg').textContent = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 4000); }
 
+        function openReportsModal() { document.getElementById('reportsModal').classList.remove('hidden'); window.location.hash = "reportsModal"; }
+        function closeReportsModal() { document.getElementById('reportsModal').classList.add('hidden'); history.pushState("", document.title, window.location.pathname + window.location.search); }
+
         window.onload = function() {
             renderProfitChart();
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('status') === 'success') { showToast("تم الحفظ بنجاح وتحديث ميزان الأرباح!"); window.history.replaceState({}, document.title, "index.php#form-section"); }
             if (window.location.hash === "#form-section") { document.getElementById('form-section').scrollIntoView({ behavior: 'smooth' }); }
-            if (window.location.hash === "#chart-section") { document.getElementById('chart-section').scrollIntoView({ behavior: 'smooth' }); }
+            if (window.location.hash === "#reportsModal") { document.getElementById('reportsModal').classList.remove('hidden'); }
         }
 
         const ajaxForm = document.getElementById('ajax-form');
