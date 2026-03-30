@@ -289,23 +289,33 @@ $transactions = $stmt->fetchAll();
             </div>
 
             <div class="lg:col-span-7 order-1 lg:order-2">
-                <div class="glass-card overflow-hidden shadow-2xl flex flex-col max-h-[750px]">
-                    <div class="p-4 border-b border-slate-700 bg-slate-800/40 sticky top-0 z-20 flex justify-between items-center text-right"><h2 class="text-sm font-black text-slate-300 uppercase tracking-widest italic"><i data-lucide="activity"></i> السجل المتسلسل</h2><button onclick="location.reload()" class="text-[10px] text-blue-400 font-bold hover:underline">تحديث</button></div>
-                    <div class="overflow-y-auto flex-grow custom-scrollbar">
-                        <table class="w-full text-right min-w-[400px]">
-                            <thead class="bg-slate-800/90 text-slate-500 text-[10px] uppercase font-black tracking-widest sticky top-0 z-10">
-                                <tr><th class="px-4 py-3">بيانات التداول</th><th class="px-4 py-3 text-center text-white">إجمالي (YER)</th><th class="px-4 py-3 text-center">إدارة</th></tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-800" id="transactions-list">
-                                <?php foreach($transactions as $row): ?>
-                                <tr class="hover:bg-slate-800/50 transition">
-                                    <td class="px-4 py-4 text-right"><div class="flex items-center gap-3"><div class="p-2 rounded <?php echo $row['type']=='buy'?'bg-blue-500/10 text-blue-400':'bg-green-500/10 text-green-400'; ?>"><i data-lucide="<?php echo $row['type']=='buy'?'plus':'minus'; ?>" class="w-4 h-4"></i></div><div><p class="text-sm font-black text-slate-200 tabular-nums"><?php echo number_format($row['crypto_amount'], 2); ?> USDT</p><p class="text-[9px] text-slate-500 italic font-bold"><?php echo date('Y-m-d | H:i', strtotime($row['created_at'])); ?></p></div></div></td>
-                                    <td class="px-4 py-4 text-center font-bold"><p class="text-sm font-black text-white tabular-nums"><?php echo number_format($row['total_fiat_paid'], 2); ?></p><p class="text-[9px] text-slate-500 italic">سعر: <?php echo $row['price_per_unit']; ?></p></td>
-                                    <td class="px-4 py-4 text-center"><div class="flex justify-center gap-4 opacity-0 hover:opacity-100 transition"><button onclick='openEditModal(<?php echo json_encode($row); ?>)' class="text-blue-400 hover:scale-125 transition-transform"><i data-lucide="edit-3" class="w-4 h-4"></i></button><a href="delete.php?id=<?php echo $row['id']; ?>" onclick="return confirm('حذف؟')" class="text-rose-500 hover:scale-125 transition-transform"><i data-lucide="trash-2" class="w-4 h-4"></i></a></div></td>
-                                </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                <div class="glass-card flex flex-col h-[600px] md:h-[750px] shadow-2xl overflow-hidden">
+                    <!-- رأس السجل المطور -->
+                    <div class="p-4 border-b border-slate-700 bg-slate-800/40">
+                        <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
+                            <h2 class="text-sm font-black text-slate-300 uppercase tracking-widest italic flex items-center gap-2"><i data-lucide="activity" class="text-blue-500"></i> السجل المتسلسل</h2>
+                            <div class="flex bg-slate-900/60 p-1 rounded-lg border border-slate-700/50">
+                                <button onclick="filterType('all')" id="btn-all" class="px-4 py-1 text-[10px] font-black rounded-md transition-all bg-blue-600 text-white shadow-lg">الكل</button>
+                                <button onclick="filterType('buy')" id="btn-buy" class="px-4 py-1 text-[10px] font-bold rounded-md transition-all text-slate-400 hover:text-white">شراء</button>
+                                <button onclick="filterType('sell')" id="btn-sell" class="px-4 py-1 text-[10px] font-bold rounded-md transition-all text-slate-400 hover:text-white">بيع</button>
+                            </div>
+                        </div>
+                        <div class="relative group">
+                            <i data-lucide="search" class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-blue-400 transition-colors"></i>
+                            <input type="text" id="recordSearch" placeholder="بحث بالمبلغ، السعر، أو التاريخ..." class="w-full bg-slate-900/80 border border-slate-700 rounded-xl py-2.5 pr-10 pl-4 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/5 transition-all">
+                        </div>
+                    </div>
+
+                    <!-- قائمة العمليات المفرزة -->
+                    <div class="overflow-y-auto flex-grow custom-scrollbar p-4 space-y-4" id="transactions-container">
+                        <!-- سيتم تعبئة البيانات بواسطة JS لضمان البحث الفوري والفلترة -->
+                    </div>
+
+                    <!-- زر عرض المزيد -->
+                    <div id="loadMoreContainer" class="p-4 text-center border-t border-slate-800 bg-slate-800/20">
+                        <button onclick="loadMore()" class="text-[10px] font-black text-blue-400 hover:text-blue-300 uppercase tracking-widest flex items-center gap-2 mx-auto transition-all active:scale-95">
+                            <i data-lucide="chevron-down" class="w-4 h-4"></i> عرض المزيد من العمليات
+                        </button>
                     </div>
                 </div>
             </div>
@@ -356,6 +366,7 @@ $transactions = $stmt->fetchAll();
 
         window.onload = function() {
             renderProfitChart();
+            renderTransactions();
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('status') === 'success') { showToast("تم الحفظ بنجاح وتحديث ميزان الأرباح!"); window.history.replaceState({}, document.title, "index.php#form-section"); }
             if (window.location.hash === "#form-section") { document.getElementById('form-section').scrollIntoView({ behavior: 'smooth' }); }
@@ -425,6 +436,96 @@ $transactions = $stmt->fetchAll();
             document.getElementById('edit_date').value = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
             document.getElementById('editModal').classList.remove('hidden');
         }
+
+        // --- نظام السجل المتطور ---
+        const rawTransactions = <?php echo json_encode($transactions); ?>;
+        let filteredTransactions = [...rawTransactions];
+        let currentFilter = 'all';
+        let itemsToShow = 20;
+
+        function renderTransactions() {
+            const container = document.getElementById('transactions-container');
+            container.innerHTML = '';
+
+            let lastDate = "";
+            const searchTerm = document.getElementById('recordSearch').value.toLowerCase();
+
+            const results = filteredTransactions.filter(t => {
+                const matchesSearch = t.crypto_amount.toString().includes(searchTerm) ||
+                                    t.price_per_unit.toString().includes(searchTerm) ||
+                                    t.created_at.includes(searchTerm);
+                const matchesType = currentFilter === 'all' || t.type === currentFilter;
+                return matchesSearch && matchesType;
+            });
+
+            if (results.length === 0) {
+                container.innerHTML = '<div class="text-center py-10 text-slate-500 font-bold italic">لا توجد نتائج مطابقة...</div>';
+                document.getElementById('loadMoreContainer').style.display = 'none';
+                return;
+            }
+
+            const visibleResults = results.slice(0, itemsToShow);
+
+            visibleResults.forEach(t => {
+                const dateOnly = new Date(t.created_at).toLocaleDateString('ar-YE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                if (dateOnly !== lastDate) {
+                    container.innerHTML += `<div class="sticky top-0 z-10 bg-slate-900/90 backdrop-blur px-4 py-1.5 rounded-lg border border-slate-800 text-[10px] font-black text-blue-400 mt-6 mb-2 flex items-center gap-2"><i data-lucide="calendar" class="w-3 h-3"></i> ${dateOnly}</div>`;
+                    lastDate = dateOnly;
+                }
+
+                const card = `
+                    <div class="glass-card p-4 hover:bg-slate-800/40 transition-all border-r-4 ${t.type === 'buy' ? 'border-r-blue-500' : 'border-r-green-500'} group">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center gap-3">
+                                <div class="p-2 rounded-lg ${t.type === 'buy' ? 'bg-blue-500/10 text-blue-400' : 'bg-green-500/10 text-green-400'}">
+                                    <i data-lucide="${t.type === 'buy' ? 'arrow-down-left' : 'arrow-up-right'}" class="w-4 h-4"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-black tabular-nums">${parseFloat(t.crypto_amount).toLocaleString()} <span class="text-[10px] opacity-50">USDT</span></p>
+                                    <p class="text-[9px] text-slate-500 font-bold">${new Date(t.created_at).toLocaleTimeString('ar-YE', {hour:'2-digit', minute:'2-digit'})}</p>
+                                </div>
+                            </div>
+                            <div class="text-left">
+                                <p class="text-sm font-black text-white tabular-nums">${parseFloat(t.total_fiat_paid).toLocaleString()} <span class="text-[10px] text-slate-500">YER</span></p>
+                                <p class="text-[9px] text-slate-500 italic">سعر الصرف: ${t.price_per_unit}</p>
+                            </div>
+                            <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onclick='openEditModal(${JSON.stringify(t)})' class="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg"><i data-lucide="edit-3" class="w-3.5 h-3.5"></i></button>
+                                <a href="delete.php?id=${t.id}" onclick="return confirm('حذف؟')" class="p-2 text-rose-500 hover:bg-rose-500/10 rounded-lg"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += card;
+            });
+
+            lucide.createIcons();
+            document.getElementById('loadMoreContainer').style.display = (itemsToShow >= results.length) ? 'none' : 'block';
+        }
+
+        function filterType(type) {
+            currentFilter = type;
+            itemsToShow = 20;
+            ['all', 'buy', 'sell'].forEach(t => {
+                const btn = document.getElementById('btn-' + t);
+                btn.classList.remove('bg-blue-600', 'text-white', 'shadow-lg');
+                btn.classList.add('text-slate-400');
+            });
+            const activeBtn = document.getElementById('btn-' + type);
+            activeBtn.classList.add('bg-blue-600', 'text-white', 'shadow-lg');
+            activeBtn.classList.remove('text-slate-400');
+            renderTransactions();
+        }
+
+        function loadMore() {
+            itemsToShow += 20;
+            renderTransactions();
+        }
+
+        document.getElementById('recordSearch').addEventListener('input', () => {
+            itemsToShow = 20;
+            renderTransactions();
+        });
 
 function renderProfitChart() {
     const canvas = document.getElementById('profitChart');
