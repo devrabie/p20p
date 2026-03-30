@@ -266,9 +266,10 @@ $transactions = $stmt->fetchAll();
         </div>
     </div>
 
-        <div id="form-section" class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <div class="lg:col-span-5 order-2 lg:order-1 text-right">
-                <div class="glass-card p-6 md:p-8 border-b-4 border-b-yellow-500 shadow-2xl">
+        <div id="form-section" class="flex flex-col gap-8">
+            <!-- قسم تسجيل عملية جديدة - يظهر أولاً -->
+            <div class="w-full text-right">
+                <div class="glass-card p-6 md:p-8 border-b-4 border-b-yellow-500 shadow-2xl max-w-4xl mx-auto">
                     <h2 class="text-lg font-bold mb-8 text-yellow-500 italic flex items-center gap-3"><i data-lucide="zap"></i> تسجيل عملية جديدة</h2>
                     <form id="ajax-form" class="space-y-5">
                         <div class="flex items-center gap-2 mb-4 p-3 bg-blue-500/5 border border-blue-500/20"><input type="checkbox" id="enable_backdate" class="w-4 h-4 accent-yellow-500 cursor-pointer" onchange="toggleDateInput()"><label for="enable_backdate" class="text-xs text-blue-400 font-bold cursor-pointer italic select-none">تأريخ يدوي؟</label></div>
@@ -290,8 +291,9 @@ $transactions = $stmt->fetchAll();
                 </div>
             </div>
 
-            <div class="lg:col-span-7 order-1 lg:order-2">
-                <div class="glass-card flex flex-col h-[600px] md:h-[750px] shadow-2xl overflow-hidden">
+            <!-- السجل المتسلسل - يظهر ثانياً في الأسفل -->
+            <div class="w-full">
+                <div class="glass-card flex flex-col h-[600px] md:h-[750px] shadow-2xl overflow-hidden max-w-4xl mx-auto">
                     <!-- رأس السجل المطور -->
                     <div class="p-4 border-b border-slate-700 bg-slate-800/40">
                         <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
