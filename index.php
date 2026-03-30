@@ -198,19 +198,21 @@ $transactions = $stmt->fetchAll();
                     <button onclick="document.getElementById('settingsModal').classList.remove('hidden')" class="text-yellow-500 hover:scale-125 transition"><i data-lucide="sliders"></i></button>
                 </div>
             </div>
-            <a href="reports.php" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded font-bold flex items-center gap-2 shadow-lg transition"><i data-lucide="calendar-days"></i> التقارير والتحليل</a>
+
+            <div class="flex items-center gap-3">
+                <a href="reports.php" class="bg-gradient-to-l from-indigo-700 to-blue-900 hover:from-indigo-600 hover:to-blue-800 text-white px-6 py-3.5 rounded-xl font-black flex items-center gap-2 shadow-lg shadow-indigo-900/40 transition-all border border-indigo-500/30 active:scale-95">
+                    <i data-lucide="calendar-days" class="w-4 h-4 text-indigo-300"></i> الأرشيف والتحليل
+                </a>
+                <button onclick="openReportsModal()" class="bg-gradient-to-l from-emerald-600 to-teal-800 hover:from-emerald-500 hover:to-teal-700 text-white px-6 py-3.5 rounded-xl font-black flex items-center gap-2 shadow-lg shadow-emerald-900/40 transition-all border border-emerald-500/30 active:scale-95">
+                    <i data-lucide="layout-dashboard" class="w-4 h-4 text-emerald-300"></i> عرض التقارير
+                </button>
+            </div>
         </header>
 
         <!-- الصف الرئيسي: المخزون وربح اليوم -->
-        <div class="grid grid-cols-2 gap-4 mb-6">
+        <div class="grid grid-cols-2 gap-4 mb-10">
             <div class="glass-card p-5 border-r-4 border-yellow-500 shadow-xl"><span class="text-slate-400 text-[10px] font-bold block mb-1 uppercase italic tracking-tighter">المخزون المتوفر (Stock)</span><h3 class="text-lg md:text-xl font-black text-yellow-500 tabular-nums"><?php echo number_format($remaining_stock, 2); ?></h3></div>
             <div class="glass-card p-4 bg-blue-500/10 border border-blue-500/20"><span class="text-[9px] text-blue-500 font-black uppercase mb-1 block">ربح اليوم ($)</span><h3 class="text-lg font-black text-blue-400 tabular-nums">$<?php echo number_format($daily_profit_usd_val, 2); ?></h3></div>
-        </div>
-
-        <div class="mb-10 text-center">
-            <button onclick="openReportsModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-4 rounded-xl font-black flex items-center gap-3 shadow-xl transition mx-auto italic uppercase tracking-widest border-b-4 border-emerald-800 active:border-b-0 active:translate-y-1">
-                <i data-lucide="pie-chart"></i> عرض التقارير والإحصائيات
-            </button>
         </div>
 
     <!-- نافذة التقارير المنبثقة -->
