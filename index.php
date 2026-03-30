@@ -226,7 +226,7 @@ $transactions = $stmt->fetchAll();
         </div>
 
 <!-- قسم الرسم البياني مع شريط تمرير -->
-<div class="glass-card p-6 mb-10">
+<div id="chart-section" class="glass-card p-6 mb-10">
     <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
         <h2 class="text-sm font-black text-slate-300 uppercase tracking-widest italic flex items-center gap-2">
             <i data-lucide="bar-chart-3" class="text-emerald-500"></i> تحليل الأداء 
@@ -234,10 +234,9 @@ $transactions = $stmt->fetchAll();
         </h2>
         
         <div class="flex bg-slate-900/80 p-1 rounded border border-slate-700">
-            <a href="?range=day" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='day'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">اليوم</a>
-            <a href="?range=week" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='week'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">أسبوعي</a>
-            <a href="?range=month" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='month'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">شهري</a>
-            <a href="?range=pulse" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='pulse'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">النبض</a>
+            <a href="?range=day#chart-section" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='day'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">اليوم</a>
+            <a href="?range=week#chart-section" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='week'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">أسبوعي</a>
+            <a href="?range=month#chart-section" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='month'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">شهري</a>
         </div>
     </div>
 
@@ -341,6 +340,7 @@ $transactions = $stmt->fetchAll();
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('status') === 'success') { showToast("تم الحفظ بنجاح وتحديث ميزان الأرباح!"); window.history.replaceState({}, document.title, "index.php#form-section"); }
             if (window.location.hash === "#form-section") { document.getElementById('form-section').scrollIntoView({ behavior: 'smooth' }); }
+            if (window.location.hash === "#chart-section") { document.getElementById('chart-section').scrollIntoView({ behavior: 'smooth' }); }
         }
 
         const ajaxForm = document.getElementById('ajax-form');
