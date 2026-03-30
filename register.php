@@ -98,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 <input type="password" name="password" required placeholder="••••••••" class="input-dark">
             </div>
 
-            <button type="submit" class="w-full bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-4 rounded-xl transition-all shadow-lg shadow-yellow-900/20 active:scale-95 flex items-center justify-center gap-2">
+            <button type="submit" class="w-full bg-gradient-to-l from-indigo-700 to-blue-900 hover:from-indigo-600 hover:to-blue-800 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-indigo-900/40 active:scale-95 flex items-center justify-center gap-2">
                 إنشاء الحساب الآن <i data-lucide="arrow-left" class="w-4 h-4"></i>
             </button>
         </form>

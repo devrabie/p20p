@@ -155,7 +155,9 @@ $transactions = $stmt->fetchAll();
     .glass-card { background: var(--bg-card); border: 1px solid var(--border-color); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); border-radius: var(--radius) !important; }
     .input-dark { background-color: #0d1220; border: 1px solid var(--border-color); color: white; padding: 12px; border-radius: var(--radius) !important; width: 100%; font-size: 15px; transition: all 0.3s ease; }
     .input-dark:focus { border-color: var(--accent-gold); outline: none; box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.1); }
-    .btn-yellow { background: linear-gradient(135deg, #facc15 0%, #eab308 100%); color: #0f172a; font-weight: 900; border-radius: var(--radius) !important; transition: all 0.3s; }
+    .btn-primary-glass { background: linear-gradient(135deg, rgba(79, 70, 229, 0.8) 0%, rgba(30, 58, 138, 0.8) 100%); backdrop-filter: blur(10px); color: white; border: 1px solid rgba(255, 255, 255, 0.1); font-weight: 800; border-radius: 12px !important; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 4px 15px -3px rgba(0, 0, 0, 0.4); }
+    .btn-primary-glass:hover { transform: translateY(-2px); background: linear-gradient(135deg, rgba(99, 102, 241, 0.9) 0%, rgba(37, 99, 235, 0.9) 100%); box-shadow: 0 10px 25px -5px rgba(67, 56, 202, 0.4); border-color: rgba(255, 255, 255, 0.2); }
+    .btn-primary-glass:active { transform: scale(0.97); }
     #toast { transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); transform: translate(-50%, 100px); visibility: hidden; opacity: 0; z-index: 9999; }
     #toast.show { visibility: visible; opacity: 1; transform: translate(-50%, 0); }
     nav { border-radius: 0 0 var(--radius) var(--radius) !important; border-bottom: 2px solid var(--accent-gold) !important; }
@@ -283,7 +285,7 @@ $transactions = $stmt->fetchAll();
                         </div>
                         <div class="p-3 bg-yellow-500/5 border border-yellow-500/20 rounded"><label class="block text-[10px] text-yellow-500 font-bold uppercase italic mb-1 flex justify-between"><span>رسوم بينانس (USDT)</span> <span class="text-[8px] text-slate-500">تلقائي 0.1%</span></label><input type="number" step="any" name="binance_fee" id="binance_fee_input" class="input-dark text-sm font-bold text-yellow-500 tabular-nums text-center"></div>
                         <div id="manualFeeContainer" class="bg-slate-900/50 p-4 border border-dashed border-slate-700"><label class="block text-[10px] text-blue-400 mb-2 font-bold uppercase italic">رسوم صراف إضافية (YER)</label><input type="number" step="any" name="manual_fee" id="manual_fiat_fee" class="input-dark tabular-nums text-center" placeholder="0.00"></div>
-                        <button type="submit" id="submit-btn" class="w-full btn-yellow py-4 flex justify-center items-center gap-2 active:scale-95 transition-all font-black uppercase tracking-widest italic"><i data-lucide="save"></i> حفظ وتحديث</button>
+                        <button type="submit" id="submit-btn" class="w-full btn-primary-glass py-4 flex justify-center items-center gap-2 font-black uppercase tracking-widest italic"><i data-lucide="save"></i> حفظ وتحديث</button>
                     </form>
                 </div>
             </div>
@@ -329,7 +331,7 @@ $transactions = $stmt->fetchAll();
             <form action="update_settings.php" method="POST" class="space-y-6">
                 <div><label class="block text-xs text-blue-400 mb-2 font-black uppercase italic tracking-widest">سعر الشراء الافتراضي</label><input type="number" step="any" name="default_buy_price" value="<?php echo $def_buy; ?>" class="input-dark text-2xl font-black text-center tabular-nums"></div>
                 <div><label class="block text-xs text-green-400 mb-2 font-black uppercase italic tracking-widest">سعر البيع الافتراضي</label><input type="number" step="any" name="default_sell_price" value="<?php echo $def_sell; ?>" class="input-dark text-2xl font-black text-center tabular-nums"></div>
-                <div class="flex gap-4 pt-4"><button type="submit" class="flex-1 btn-yellow py-4 shadow-lg font-black uppercase italic">حفظ</button><button type="button" onclick="document.getElementById('settingsModal').classList.add('hidden')" class="flex-1 bg-slate-800 py-4 text-xs font-black text-white uppercase italic">إغلاق</button></div>
+                <div class="flex gap-4 pt-4"><button type="submit" class="flex-1 btn-primary-glass py-4 font-black uppercase italic">حفظ</button><button type="button" onclick="document.getElementById('settingsModal').classList.add('hidden')" class="flex-1 bg-slate-800 py-4 text-xs font-black text-white uppercase italic">إغلاق</button></div>
             </form>
         </div>
     </div>
@@ -346,7 +348,7 @@ $transactions = $stmt->fetchAll();
                     <div><label class="block text-xs text-slate-400 mb-1 font-black">السعر</label><input type="number" step="any" name="price" id="edit_price" required class="input-dark font-black tabular-nums text-center"></div>
                 </div>
                 <div><label class="block text-xs text-yellow-500 mb-2 font-black uppercase italic underline text-center">تعديل الرسوم (USDT)</label><input type="number" step="any" name="binance_fee" id="edit_binance_fee" class="input-dark text-yellow-500 font-black tabular-nums text-center"></div>
-                <div class="flex gap-4 pt-4"><button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-500 py-4 font-black text-white uppercase italic">تحديث</button><button type="button" onclick="document.getElementById('editModal').classList.add('hidden')" class="flex-1 bg-slate-800 py-4 text-xs font-black text-white uppercase italic">تراجع</button></div>
+                <div class="flex gap-4 pt-4"><button type="submit" class="flex-1 btn-primary-glass py-4 font-black text-white uppercase italic">تحديث</button><button type="button" onclick="document.getElementById('editModal').classList.add('hidden')" class="flex-1 bg-slate-800 py-4 text-xs font-black text-white uppercase italic">تراجع</button></div>
             </form>
         </div>
     </div>
