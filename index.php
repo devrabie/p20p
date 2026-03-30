@@ -1,0 +1,488 @@
+<?php 
+/**
+ * نظام LEDGER PRO - النسخة الإمبراطورية الكاملة
+ * 12 بطاقة إحصائية - رسم بياني ذكي - أتمتة شاملة - دقة بينانس
+ */
+
+session_start();
+require_once 'db.php'; 
+
+// 1. ضبط التوقيت لليمن (GMT+3) لضمان دقة العمليات الحالية واليومية
+date_default_timezone_set('Asia/Aden');
+$pdo->exec("SET time_zone = '+03:00'");
+$today = date('Y-m-d');
+
+// 2. حماية الصفحة: التأكد من تسجيل الدخول وتحديد هوية المستخدم
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit();
+}
+$user_id = $_SESSION['user_id']; 
+$username = $_SESSION['username'] ?? 'مستخدم';
+
+// --- البدء بجلب البيانات الخاصة بالمستخدم الحالي فقط ---
+
+// جلب إعدادات الأسعار الافتراضية
+$settings_stmt = $pdo->prepare("SELECT default_buy_price, default_sell_price FROM settings WHERE user_id = ?");
+$settings_stmt->execute([$user_id]);
+$settings = $settings_stmt->fetch();
+$def_buy = $settings['default_buy_price'] ?? 535;
+$def_sell = $settings['default_sell_price'] ?? 540;
+
+// حساب متوسط الشراء (WAC) بدقة Float - أساس حساب الربح الحقيقي
+$buy_stats_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid) as total_spent, SUM(crypto_amount) as total_bought FROM transactions WHERE user_id = ? AND type='buy'");
+$buy_stats_stmt->execute([$user_id]);
+$buy_stats = $buy_stats_stmt->fetch();
+$avg_buy_price = ($buy_stats['total_bought'] > 0) ? ($buy_stats['total_spent'] / $buy_stats['total_bought']) : 0;
+
+// أ. حساب الأرباح التراكمية (YER / USD)
+$profit_stmt = $pdo->prepare("SELECT SUM((price_per_unit - ?) * crypto_amount) as net_profit FROM transactions WHERE user_id = ? AND type='sell'");
+$profit_stmt->execute([$avg_buy_price, $user_id]);
+$total_profit_yer_all = $profit_stmt->fetchColumn() ?: 0;
+$total_profit_usd_all = ($def_buy > 0) ? ($total_profit_yer_all / $def_buy) : 0;
+
+// ب. حساب حجم التداول اليومي (Volume)
+$daily_buy_vol_stmt = $pdo->prepare("SELECT SUM(crypto_amount) FROM transactions WHERE user_id = ? AND type='buy' AND DATE(created_at) = ?");
+$daily_buy_vol_stmt->execute([$user_id, $today]);
+$daily_buy_vol = $daily_buy_vol_stmt->fetchColumn() ?: 0;
+
+$daily_sell_vol_stmt = $pdo->prepare("SELECT SUM(crypto_amount) FROM transactions WHERE user_id = ? AND type='sell' AND DATE(created_at) = ?");
+$daily_sell_vol_stmt->execute([$user_id, $today]);
+$daily_sell_vol = $daily_sell_vol_stmt->fetchColumn() ?: 0;
+
+// ج. حساب مبالغ السيولة النقدية لليوم (YER)
+$daily_in_money_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid) FROM transactions WHERE user_id = ? AND type='buy' AND DATE(created_at) = ?");
+$daily_in_money_stmt->execute([$user_id, $today]);
+$daily_in_money = $daily_in_money_stmt->fetchColumn() ?: 0;
+
+$daily_out_money_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid) FROM transactions WHERE user_id = ? AND type='sell' AND DATE(created_at) = ?");
+$daily_out_money_stmt->execute([$user_id, $today]);
+$daily_out_money = $daily_out_money_stmt->fetchColumn() ?: 0;
+
+// د. حساب المخزون المتوفر (Stock)
+$total_in = $pdo->prepare("SELECT SUM(crypto_amount) FROM transactions WHERE user_id = ? AND type='buy'");
+$total_in->execute([$user_id]);
+$sum_in = $total_in->fetchColumn() ?: 0;
+
+$total_out = $pdo->prepare("SELECT SUM(total_crypto_deducted) FROM transactions WHERE user_id = ? AND type='sell'");
+$total_out->execute([$user_id]);
+$sum_out = $total_out->fetchColumn() ?: 0;
+$remaining_stock = $sum_in - $sum_out;
+
+// هـ. حسابات اليوم (أرباح ورسوم اليوم فقط)
+$daily_profit_stmt = $pdo->prepare("SELECT SUM((price_per_unit - ?) * crypto_amount) FROM transactions WHERE user_id = ? AND type='sell' AND DATE(created_at) = ?");
+$daily_profit_stmt->execute([$avg_buy_price, $user_id, $today]);
+$daily_profit_yer_val = $daily_profit_stmt->fetchColumn() ?: 0;
+$daily_profit_usd_val = ($def_buy > 0) ? ($daily_profit_yer_val / $def_buy) : 0;
+
+$daily_fees_stmt = $pdo->prepare("SELECT SUM(binance_fee) FROM transactions WHERE user_id = ? AND DATE(created_at) = ?");
+$daily_fees_stmt->execute([$user_id, $today]);
+$daily_fees_usdt_val = $daily_fees_stmt->fetchColumn() ?: 0;
+$daily_fees_yer_val = $daily_fees_usdt_val * $def_buy;
+
+// و. جلب بيانات الرسم البياني (آخر 7 أيام)
+// و. جلب بيانات الرسم البياني (آخر 20 عملية بيع - منحنى تراكمي)
+$chart_stmt = $pdo->prepare("
+    SELECT created_at, ((price_per_unit - ?) * crypto_amount) as op_profit 
+    FROM transactions 
+    WHERE user_id = ? AND type = 'sell' 
+    ORDER BY id ASC LIMIT 50
+");
+$chart_stmt->execute([$avg_buy_price, $user_id]);
+$chart_raw_data = $chart_stmt->fetchAll();
+
+// جلب النطاق الزمني المختار (الافتراضي هو 'pulse' للعمليات اللحظية)
+// و. جلب بيانات الرسم البياني (منفصلة تماماً حسب النوع)
+$range = $_GET['range'] ?? 'pulse';
+$chart_labels = [];
+$chart_values = [];
+$cumulative_profit = 0;
+
+// جلب الربح الإجمالي السابق (للبدء منه في الرسم التراكمي للأسبوع والشهر)
+$initial_profit_stmt = $pdo->prepare("SELECT SUM((price_per_unit - ?) * crypto_amount) FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) < ?");
+
+if ($range === 'pulse') {
+    // وضع النبض: آخر 20 عملية بيع فردية مرتبة زمنياً بدقة
+    $stmt = $pdo->prepare("SELECT created_at, ((price_per_unit - ?) * crypto_amount) as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' ORDER BY id ASC LIMIT 30");
+    $stmt->execute([$avg_buy_price, $user_id]);
+    $data_rows = $stmt->fetchAll();
+    
+    foreach ($data_rows as $index => $data) {
+        $cumulative_profit += (float)$data['op_profit'];
+        $chart_labels[] = ($index + 1); // نستخدم أرقام تسلسلية للعمليات لعدم تداخل الوقت
+        $chart_values[] = round($cumulative_profit, 2);
+    }
+} else {
+    // وضع أسبوعي أو شهري
+    $days_count = ($range === 'month') ? 30 : 7;
+    $start_date = date('Y-m-d', strtotime("-".($days_count-1)." days"));
+    
+    // جلب الربح الذي تحقق قبل هذه الفترة للبدء به كقاعدة للرسم
+    $initial_profit_stmt->execute([$avg_buy_price, $user_id, $start_date]);
+    $cumulative_profit = (float)($initial_profit_stmt->fetchColumn() ?: 0);
+
+    for ($i = $days_count - 1; $i >= 0; $i--) {
+        $current_d = date('Y-m-d', strtotime("-$i days"));
+        $chart_labels[] = date('m-d', strtotime($current_d));
+        
+        $day_stmt = $pdo->prepare("SELECT SUM((price_per_unit - ?) * crypto_amount) FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) = ?");
+        $day_stmt->execute([$avg_buy_price, $user_id, $current_d]);
+        $day_val = (float)($day_stmt->fetchColumn() ?: 0);
+        
+        $cumulative_profit += $day_val;
+        $chart_values[] = round($cumulative_profit, 2);
+    }
+}
+// إضافة نقطة البداية (صفر)
+$chart_labels[] = "البداية";
+$chart_values[] = 0;
+
+foreach ($chart_raw_data as $data) {
+    $cumulative_profit += (float)$data['op_profit'];
+    $chart_labels[] = date('H:i', strtotime($data['created_at'])); // عرض الوقت بالساعة والدقيقة
+    $chart_values[] = round($cumulative_profit, 2);
+}
+
+// ز. جلب السجل التاريخي (آخر 500 عملية)
+$stmt = $pdo->prepare("SELECT * FROM transactions WHERE user_id = ? ORDER BY id DESC LIMIT 500");
+$stmt->execute([$user_id]);
+$transactions = $stmt->fetchAll();
+?>
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ledger Pro | المحاسب الذكي</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+    :root { --bg-main: #0a0f1c; --bg-card: #151b2d; --accent-gold: #eab308; --border-color: #242f48; --radius: 4px; }
+    body { font-family: 'Tajawal', sans-serif; background-color: var(--bg-main); color: #e2e8f0; line-height: 1.6; scroll-behavior: smooth; font-style: normal !important; }
+    * { font-style: normal !important; }
+    .glass-card { background: var(--bg-card); border: 1px solid var(--border-color); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); border-radius: var(--radius) !important; }
+    .input-dark { background-color: #0d1220; border: 1px solid var(--border-color); color: white; padding: 12px; border-radius: var(--radius) !important; width: 100%; font-size: 15px; transition: all 0.3s ease; }
+    .input-dark:focus { border-color: var(--accent-gold); outline: none; box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.1); }
+    .btn-yellow { background: linear-gradient(135deg, #facc15 0%, #eab308 100%); color: #0f172a; font-weight: 900; border-radius: var(--radius) !important; transition: all 0.3s; }
+    #toast { transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); transform: translate(-50%, 100px); visibility: hidden; opacity: 0; z-index: 9999; }
+    #toast.show { visibility: visible; opacity: 1; transform: translate(-50%, 0); }
+    nav { border-radius: 0 0 var(--radius) var(--radius) !important; border-bottom: 2px solid var(--accent-gold) !important; }
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    .tabular-nums { font-family: 'Courier New', monospace; font-weight: 700; }
+    .custom-scrollbar::-webkit-scrollbar {
+    height: 4px; /* جعل الشريط نحيفاً جداً للجمالية */
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #eab308; /* لون ذهبي مطابق للهوية */
+    border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #1e293b;
+}
+</style>
+</head>
+<body class="p-3 md:p-6 pb-20">
+
+    <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-8 py-4 rounded shadow-2xl font-black flex items-center gap-3 border border-emerald-400/30">
+        <i data-lucide="check-circle"></i> <span id="toast-msg">تم الحفظ بنجاح!</span>
+    </div>
+
+    <nav class="max-w-6xl mx-auto bg-[#1e293b]/50 border-b border-slate-800 py-3 px-4 md:px-8 flex justify-between items-center mb-8 glass-card">
+        <div class="flex items-center gap-3 group">
+            <div class="w-10 h-10 bg-yellow-500/10 rounded-full flex items-center justify-center border border-yellow-500/20 group-hover:scale-110 transition"><i data-lucide="user-lock" class="w-6 h-6 text-yellow-500"></i></div>
+            <div class="flex flex-col text-right"><span class="text-[10px] text-slate-500 font-bold uppercase italic">حساب التاجر</span><span class="text-sm font-black text-white"><?php echo htmlspecialchars($username); ?></span></div>
+        </div>
+        <a href="logout.php" onclick="return confirm('خروج؟')" class="flex items-center gap-2 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white px-5 py-2.5 rounded text-xs font-black border border-rose-500/20 transition-all"><span>خروج آمن</span> <i data-lucide="log-out" class="w-4 h-4"></i></a>
+    </nav>
+
+    <div class="max-w-6xl mx-auto">
+        <header class="flex flex-col md:flex-row justify-between items-center gap-6 mb-10 text-right">
+            <div>
+                <h1 class="text-3xl font-black text-yellow-500 flex items-center gap-3 italic"><i data-lucide="shield-check"></i> LEDGER PRO</h1>
+                <div class="flex gap-4 mt-3">
+                    <div class="text-xs text-blue-400 font-bold border-l border-slate-700 pl-4 uppercase tracking-tighter">شراء: <span class="text-white"><?php echo number_format($def_buy, 2); ?></span></div>
+                    <div class="text-xs text-green-400 font-bold border-l border-slate-700 pl-4 uppercase tracking-tighter">بيع: <span class="text-white"><?php echo number_format($def_sell, 2); ?></span></div>
+                    <button onclick="document.getElementById('settingsModal').classList.remove('hidden')" class="text-yellow-500 hover:scale-125 transition"><i data-lucide="sliders"></i></button>
+                </div>
+            </div>
+            <a href="reports.php" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded font-bold flex items-center gap-2 shadow-lg transition"><i data-lucide="calendar-days"></i> التقارير والتحليل</a>
+        </header>
+
+        <!-- الصف الأول: إحصائيات الربح والمخزون -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="glass-card p-5 border-r-4 border-emerald-500"><span class="text-slate-400 text-[10px] font-bold block mb-1 uppercase">صافي الربح (YER)</span><h3 class="text-lg md:text-xl font-black text-emerald-400 tabular-nums"><?php echo number_format($total_profit_yer_all, 2); ?></h3></div>
+            <div class="glass-card p-5 border-r-4 border-blue-500"><span class="text-slate-400 text-[10px] font-bold block mb-1 uppercase">صافي الربح ($)</span><h3 class="text-lg md:text-xl font-black text-blue-400 tabular-nums">$<?php echo number_format($total_profit_usd_all, 2); ?></h3></div>
+            <div class="glass-card p-5 border-r-4 border-yellow-500 shadow-xl"><span class="text-slate-400 text-[10px] font-bold block mb-1 uppercase italic tracking-tighter">المخزون المتوفر (Stock)</span><h3 class="text-lg md:text-xl font-black text-yellow-500 tabular-nums"><?php echo number_format($remaining_stock, 2); ?></h3></div>
+            <div class="glass-card p-5 border-r-4 border-purple-500"><span class="text-slate-400 text-[10px] font-bold block mb-1 uppercase italic">متوسط الشراء (WAC)</span><h3 class="text-lg md:text-xl font-black text-purple-400 tabular-nums"><?php echo number_format($avg_buy_price, 2); ?></h3></div>
+        </div>
+
+        <!-- الصف الثاني: فوليوم اليوم -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="glass-card p-4 bg-blue-500/5 border-l-4 border-blue-500"><span class="text-[10px] text-blue-400 font-bold block italic">شراء اليوم (Vol)</span><h3 class="text-lg font-black tabular-nums"><?php echo number_format($daily_buy_vol, 2); ?></h3></div>
+            <div class="glass-card p-4 bg-green-500/5 border-l-4 border-green-500"><span class="text-[10px] text-green-400 font-bold block italic">بيع اليوم (Vol)</span><h3 class="text-lg font-black tabular-nums"><?php echo number_format($daily_sell_vol, 2); ?></h3></div>
+            <div class="glass-card p-4 bg-slate-500/5 border-l-4 border-slate-500"><span class="text-[10px] text-slate-400 font-bold block italic">وارد اليوم (YER)</span><h3 class="text-lg font-black tabular-nums"><?php echo number_format($daily_in_money, 2); ?></h3></div>
+            <div class="glass-card p-4 bg-slate-500/5 border-l-4 border-slate-500"><span class="text-[10px] text-slate-400 font-bold block italic">صادر اليوم (YER)</span><h3 class="text-lg font-black tabular-nums"><?php echo number_format($daily_out_money, 2); ?></h3></div>
+        </div>
+
+        <!-- الصف الثالث: أرباح ورسوم اليوم -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+            <div class="glass-card p-4 bg-emerald-500/10 border border-emerald-500/20"><span class="text-[9px] text-emerald-500 font-black uppercase mb-1 block">ربح اليوم (YER)</span><h3 class="text-lg font-black text-emerald-400 tabular-nums"><?php echo number_format($daily_profit_yer_val, 2); ?></h3></div>
+            <div class="glass-card p-4 bg-blue-500/10 border border-blue-500/20"><span class="text-[9px] text-blue-500 font-black uppercase mb-1 block">ربح اليوم ($)</span><h3 class="text-lg font-black text-blue-400 tabular-nums">$<?php echo number_format($daily_profit_usd_val, 2); ?></h3></div>
+            <div class="glass-card p-4 bg-rose-500/10 border border-rose-500/20"><span class="text-[9px] text-rose-500 font-black uppercase mb-1 block">رسوم اليوم (USDT)</span><h3 class="text-lg font-black text-rose-400 tabular-nums"><?php echo number_format($daily_fees_usdt_val, 2); ?></h3></div>
+            <div class="glass-card p-4 bg-purple-500/10 border border-purple-500/20"><span class="text-[9px] text-purple-500 font-black uppercase mb-1 block">رسوم اليوم (YER)</span><h3 class="text-lg font-black text-purple-400 tabular-nums"><?php echo number_format($daily_fees_yer_val, 2); ?></h3></div>
+        </div>
+
+<!-- قسم الرسم البياني مع شريط تمرير -->
+<div class="glass-card p-6 mb-10">
+    <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+        <h2 class="text-sm font-black text-slate-300 uppercase tracking-widest italic flex items-center gap-2">
+            <i data-lucide="bar-chart-3" class="text-emerald-500"></i> تحليل الأداء 
+            <span class="text-[10px] text-slate-500 font-normal">(<?php echo strtoupper($range); ?>)</span>
+        </h2>
+        
+        <div class="flex bg-slate-900/80 p-1 rounded border border-slate-700">
+            <a href="?range=pulse" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='pulse'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">النبض</a>
+            <a href="?range=week" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='week'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">أسبوعي</a>
+            <a href="?range=month" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='month'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">شهري</a>
+        </div>
+    </div>
+
+    <!-- حاوية التمرير الأفقي المحدثة -->
+    <div class="overflow-x-auto custom-scrollbar pb-4">
+        <div id="chart-scroll-container" style="height: 300px; min-width: 100%;">
+            <canvas id="profitChart"></canvas>
+        </div>
+    </div>
+</div>
+
+        <div id="form-section" class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div class="lg:col-span-5 order-2 lg:order-1 text-right">
+                <div class="glass-card p-6 md:p-8 border-b-4 border-b-yellow-500 shadow-2xl">
+                    <h2 class="text-lg font-bold mb-8 text-yellow-500 italic flex items-center gap-3"><i data-lucide="zap"></i> تسجيل عملية جديدة</h2>
+                    <form id="ajax-form" class="space-y-5">
+                        <div class="flex items-center gap-2 mb-4 p-3 bg-blue-500/5 border border-blue-500/20"><input type="checkbox" id="enable_backdate" class="w-4 h-4 accent-yellow-500 cursor-pointer" onchange="toggleDateInput()"><label for="enable_backdate" class="text-xs text-blue-400 font-bold cursor-pointer italic select-none">تأريخ يدوي؟</label></div>
+                        <div id="date_container" style="display: none;" class="mb-4 animate-pulse"><input type="datetime-local" name="transaction_date" id="manual_date" class="input-dark text-yellow-500 border-yellow-500/30 font-bold"></div>
+                        <div id="live_clock_display" class="bg-slate-900/40 p-3 border border-slate-700 flex justify-between items-center mb-4"><span class="text-[10px] text-slate-500 font-bold italic uppercase">توقيت اليمن</span><span id="clock" class="text-sm font-black text-yellow-500 tabular-nums">--:--:--</span></div>
+                        <select name="type" id="typeSelect" onchange="handleTypeChange()" class="input-dark font-bold text-yellow-500 text-center cursor-pointer uppercase"><option value="buy">شراء (تستلم)</option><option value="sell">بيع (ترسل)</option></select>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="block text-xs text-slate-400 mb-2 font-bold italic tracking-tighter uppercase">الكمية Net</label><input type="number" step="any" name="amount" id="crypto_amount_input" required class="input-dark text-xl font-bold tabular-nums text-center" placeholder="0.00"></div>
+                            <div><label class="block text-xs text-slate-400 mb-2 font-bold italic tracking-tighter uppercase">السعر YER</label><input type="number" step="any" name="price" id="priceInput" value="<?php echo $def_buy; ?>" required class="input-dark text-xl font-black tabular-nums text-center"></div>
+                        </div>
+                        <div id="calc-preview" class="p-4 bg-slate-900/80 border border-slate-700 text-[11px] space-y-1 hidden">
+                            <div class="flex justify-between"><span>الإجمالي قبل الخصم:</span> <span id="prev-gross" class="font-bold tabular-nums">0.00</span></div>
+                            <div class="flex justify-between text-yellow-500 font-bold border-t border-slate-800 pt-1"><span>الدفع النهائي (YER):</span> <span id="prev-total-yer" class="tabular-nums font-black text-sm">0.00</span></div>
+                        </div>
+                        <div class="p-3 bg-yellow-500/5 border border-yellow-500/20 rounded"><label class="block text-[10px] text-yellow-500 font-bold uppercase italic mb-1 flex justify-between"><span>رسوم بينانس (USDT)</span> <span class="text-[8px] text-slate-500">تلقائي 0.1%</span></label><input type="number" step="any" name="binance_fee" id="binance_fee_input" class="input-dark text-sm font-bold text-yellow-500 tabular-nums text-center"></div>
+                        <div id="manualFeeContainer" class="bg-slate-900/50 p-4 border border-dashed border-slate-700"><label class="block text-[10px] text-blue-400 mb-2 font-bold uppercase italic">رسوم صراف إضافية (YER)</label><input type="number" step="any" name="manual_fee" id="manual_fiat_fee" class="input-dark tabular-nums text-center" placeholder="0.00"></div>
+                        <button type="submit" id="submit-btn" class="w-full btn-yellow py-4 flex justify-center items-center gap-2 active:scale-95 transition-all font-black uppercase tracking-widest italic"><i data-lucide="save"></i> حفظ وتحديث</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="lg:col-span-7 order-1 lg:order-2">
+                <div class="glass-card overflow-hidden shadow-2xl flex flex-col max-h-[750px]">
+                    <div class="p-4 border-b border-slate-700 bg-slate-800/40 sticky top-0 z-20 flex justify-between items-center text-right"><h2 class="text-sm font-black text-slate-300 uppercase tracking-widest italic"><i data-lucide="activity"></i> السجل المتسلسل</h2><button onclick="location.reload()" class="text-[10px] text-blue-400 font-bold hover:underline">تحديث</button></div>
+                    <div class="overflow-y-auto flex-grow custom-scrollbar">
+                        <table class="w-full text-right min-w-[400px]">
+                            <thead class="bg-slate-800/90 text-slate-500 text-[10px] uppercase font-black tracking-widest sticky top-0 z-10">
+                                <tr><th class="px-4 py-3">بيانات التداول</th><th class="px-4 py-3 text-center text-white">إجمالي (YER)</th><th class="px-4 py-3 text-center">إدارة</th></tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800" id="transactions-list">
+                                <?php foreach($transactions as $row): ?>
+                                <tr class="hover:bg-slate-800/50 transition">
+                                    <td class="px-4 py-4 text-right"><div class="flex items-center gap-3"><div class="p-2 rounded <?php echo $row['type']=='buy'?'bg-blue-500/10 text-blue-400':'bg-green-500/10 text-green-400'; ?>"><i data-lucide="<?php echo $row['type']=='buy'?'plus':'minus'; ?>" class="w-4 h-4"></i></div><div><p class="text-sm font-black text-slate-200 tabular-nums"><?php echo number_format($row['crypto_amount'], 2); ?> USDT</p><p class="text-[9px] text-slate-500 italic font-bold"><?php echo date('Y-m-d | H:i', strtotime($row['created_at'])); ?></p></div></div></td>
+                                    <td class="px-4 py-4 text-center font-bold"><p class="text-sm font-black text-white tabular-nums"><?php echo number_format($row['total_fiat_paid'], 2); ?></p><p class="text-[9px] text-slate-500 italic">سعر: <?php echo $row['price_per_unit']; ?></p></td>
+                                    <td class="px-4 py-4 text-center"><div class="flex justify-center gap-4 opacity-0 hover:opacity-100 transition"><button onclick='openEditModal(<?php echo json_encode($row); ?>)' class="text-blue-400 hover:scale-125 transition-transform"><i data-lucide="edit-3" class="w-4 h-4"></i></button><a href="delete.php?id=<?php echo $row['id']; ?>" onclick="return confirm('حذف؟')" class="text-rose-500 hover:scale-125 transition-transform"><i data-lucide="trash-2" class="w-4 h-4"></i></a></div></td>
+                                </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- نافذة الإعدادات -->
+    <div id="settingsModal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-[999]">
+        <div class="glass-card w-full max-w-sm p-8 border-2 border-yellow-500/30 shadow-2xl text-center text-right">
+            <h2 class="text-xl font-black mb-8 text-yellow-500 flex items-center justify-center gap-3 italic uppercase tracking-widest underline decoration-yellow-500/20"><i data-lucide="cog"></i> الإعدادات</h2>
+            <form action="update_settings.php" method="POST" class="space-y-6">
+                <div><label class="block text-xs text-blue-400 mb-2 font-black uppercase italic tracking-widest">سعر الشراء الافتراضي</label><input type="number" step="any" name="default_buy_price" value="<?php echo $def_buy; ?>" class="input-dark text-2xl font-black text-center tabular-nums"></div>
+                <div><label class="block text-xs text-green-400 mb-2 font-black uppercase italic tracking-widest">سعر البيع الافتراضي</label><input type="number" step="any" name="default_sell_price" value="<?php echo $def_sell; ?>" class="input-dark text-2xl font-black text-center tabular-nums"></div>
+                <div class="flex gap-4 pt-4"><button type="submit" class="flex-1 btn-yellow py-4 shadow-lg font-black uppercase italic">حفظ</button><button type="button" onclick="document.getElementById('settingsModal').classList.add('hidden')" class="flex-1 bg-slate-800 py-4 text-xs font-black text-white uppercase italic">إغلاق</button></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- نافذة التعديل -->
+    <div id="editModal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-[999]">
+        <div class="glass-card w-full max-w-md p-8 border-2 border-blue-500/30 shadow-2xl text-right">
+            <h2 class="text-xl font-black mb-8 text-blue-400 flex items-center gap-3 italic uppercase underline tracking-widest"><i data-lucide="edit"></i> تعديل بيانات</h2>
+            <form action="update.php" method="POST" class="space-y-6">
+                <input type="hidden" name="id" id="edit_id">
+                <div><label class="block text-xs text-slate-400 mb-2 font-black italic tracking-widest uppercase">تعديل التاريخ</label><input type="datetime-local" name="transaction_date" id="edit_date" required class="input-dark font-black text-yellow-500 border-yellow-500/20 tabular-nums text-center"></div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div><label class="block text-xs text-slate-400 mb-1 font-black">الكمية</label><input type="number" step="any" name="amount" id="edit_amount" required class="input-dark font-black tabular-nums text-center"></div>
+                    <div><label class="block text-xs text-slate-400 mb-1 font-black">السعر</label><input type="number" step="any" name="price" id="edit_price" required class="input-dark font-black tabular-nums text-center"></div>
+                </div>
+                <div><label class="block text-xs text-yellow-500 mb-2 font-black uppercase italic underline text-center">تعديل الرسوم (USDT)</label><input type="number" step="any" name="binance_fee" id="edit_binance_fee" class="input-dark text-yellow-500 font-black tabular-nums text-center"></div>
+                <div class="flex gap-4 pt-4"><button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-500 py-4 font-black text-white uppercase italic">تحديث</button><button type="button" onclick="document.getElementById('editModal').classList.add('hidden')" class="flex-1 bg-slate-800 py-4 text-xs font-black text-white uppercase italic">تراجع</button></div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        const BUY_PRICE_DEF = <?php echo $def_buy; ?>;
+        const SELL_PRICE_DEF = <?php echo $def_sell; ?>;
+
+        function updateClock() { const clock = document.getElementById('clock'); if (clock) { clock.textContent = new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' }); } }
+        setInterval(updateClock, 1000); updateClock();
+
+        function showToast(msg) { const toast = document.getElementById('toast'); document.getElementById('toast-msg').textContent = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 4000); }
+
+        window.onload = function() {
+            renderProfitChart();
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('status') === 'success') { showToast("تم الحفظ بنجاح وتحديث ميزان الأرباح!"); window.history.replaceState({}, document.title, "index.php#form-section"); }
+            if (window.location.hash === "#form-section") { document.getElementById('form-section').scrollIntoView({ behavior: 'smooth' }); }
+        }
+
+        const ajaxForm = document.getElementById('ajax-form');
+        ajaxForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submit-btn'); btn.disabled = true; btn.innerHTML = '<i data-lucide="loader" class="animate-spin w-4 h-4"></i>'; lucide.createIcons();
+            fetch('process.php', { method: 'POST', body: new FormData(this) })
+            .then(res => res.json())
+            .then(data => { if (data.status === 'success') { window.location.href="index.php?status=success#form-section"; window.location.reload(); } else { alert(data.message); btn.disabled = false; btn.innerText = "حفظ"; } });
+        });
+
+        const amountInput = document.getElementById('crypto_amount_input');
+        const priceInput = document.getElementById('priceInput');
+        const feeInput = document.getElementById('binance_fee_input');
+        const manualFiatInput = document.getElementById('manual_fiat_fee');
+        const typeSelect = document.getElementById('typeSelect');
+        const calcPreview = document.getElementById('calc-preview');
+
+        function updateCalculations() {
+            const amount = parseFloat(amountInput.value) || 0;
+            const price = parseFloat(priceInput.value) || 0;
+            const type = typeSelect.value;
+            const manualFiat = parseFloat(manualFiatInput.value) || 0;
+            if (amount > 0) {
+                calcPreview.classList.remove('hidden');
+                if (type === 'buy') {
+                    const gross = amount / 0.999;
+                    const fee = gross - amount;
+                    feeInput.value = fee.toFixed(2);
+                    document.getElementById('prev-gross').textContent = gross.toFixed(4);
+                    document.getElementById('prev-total-yer').textContent = ((gross * price) + manualFiat).toLocaleString();
+                } else {
+                    const fee = amount * 0.001;
+                    feeInput.value = fee.toFixed(2);
+                    document.getElementById('prev-gross').textContent = (amount + fee).toFixed(4);
+                    document.getElementById('prev-total-yer').textContent = (amount * price).toLocaleString();
+                }
+            } else { calcPreview.classList.add('hidden'); feeInput.value = "0.00"; }
+        }
+
+        amountInput.addEventListener('input', updateCalculations);
+        priceInput.addEventListener('input', updateCalculations);
+        manualFiatInput.addEventListener('input', updateCalculations);
+        typeSelect.addEventListener('change', () => { handleTypeChange(); updateCalculations(); });
+
+        function handleTypeChange() {
+            typeSelect.value === 'sell' ? priceInput.value = SELL_PRICE_DEF : priceInput.value = BUY_PRICE_DEF;
+            document.getElementById('manualFeeContainer').style.display = typeSelect.value === 'sell' ? 'none' : 'block';
+        }
+
+        function toggleDateInput() {
+            const isChecked = document.getElementById('enable_backdate').checked;
+            document.getElementById('date_container').style.display = isChecked ? 'block' : 'none';
+            document.getElementById('live_clock_display').style.display = isChecked ? 'none' : 'block';
+        }
+
+        function openEditModal(data) {
+            document.getElementById('edit_id').value = data.id;
+            document.getElementById('edit_amount').value = data.crypto_amount;
+            document.getElementById('edit_price').value = data.price_per_unit;
+            document.getElementById('edit_binance_fee').value = data.binance_fee;
+            let date = new Date(data.created_at);
+            document.getElementById('edit_date').value = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+            document.getElementById('editModal').classList.remove('hidden');
+        }
+
+function renderProfitChart() {
+    const canvas = document.getElementById('profitChart');
+    if(!canvas) return;
+
+    const labels = <?php echo json_encode($chart_labels); ?>;
+    const dataValues = <?php echo json_encode($chart_values); ?>;
+    const scrollContainer = document.getElementById('chart-scroll-container');
+
+    // --- حساب العرض الديناميكي لمنع الزحام ---
+    // سنعطي كل نقطة مساحة 50 بكسل على الأقل
+    const minPointWidth = 50; 
+    const calculatedWidth = labels.length * minPointWidth;
+    const parentWidth = canvas.parentElement.parentElement.offsetWidth;
+    
+    // إذا كان العرض المحسوب أكبر من عرض الشاشة، نقوم بتوسيع الحاوية
+    const finalWidth = Math.max(parentWidth, calculatedWidth);
+    scrollContainer.style.width = finalWidth + 'px';
+
+    if (window.myProfitChart) { window.myProfitChart.destroy(); }
+
+    window.myProfitChart = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'نمو الأرباح',
+                data: dataValues,
+                segment: {
+                    borderColor: ctx => ctx.p0.parsed.y > ctx.p1.parsed.y ? '#f43f5e' : '#10b981',
+                },
+                backgroundColor: 'rgba(16, 185, 129, 0.05)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.3,
+                pointRadius: 4,
+                pointBackgroundColor: '#eab308',
+            }]
+        },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            plugins: { legend: { display: false } },
+            scales: { 
+                y: { 
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: { color: '#64748b', font: { size: 10 } }
+                },
+                x: { 
+                    grid: { display: false }, 
+                    ticks: { 
+                        color: '#64748b', 
+                        font: { size: 9 },
+                        maxRotation: 0, // منع دوران النصوص لسهولة القراءة
+                        autoSkip: false // إظهار كل النقاط طالما يوجد تمرير
+                    }
+                }
+            }
+        }
+    });
+
+    // تحريك التمرير لليسار (آخر العمليات) تلقائياً عند التحميل
+    setTimeout(() => {
+        canvas.parentElement.parentElement.scrollLeft = 0; 
+    }, 100);
+}
+        handleTypeChange();
+    </script>
+</body>
+</html>
