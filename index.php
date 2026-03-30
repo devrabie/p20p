@@ -474,10 +474,10 @@ $transactions = $stmt->fetchAll();
                 }
 
                 const card = `
-                    <div class="glass-card p-4 hover:bg-slate-800/40 transition-all border-r-4 ${t.type === 'buy' ? 'border-r-blue-500' : 'border-r-green-500'} group">
+                    <div class="glass-card p-4 hover:bg-slate-800/40 transition-all border-r-4 ${t.type === 'buy' ? 'border-r-emerald-500' : 'border-r-rose-500'} group">
                         <div class="flex justify-between items-center">
                             <div class="flex items-center gap-3">
-                                <div class="p-2 rounded-lg ${t.type === 'buy' ? 'bg-blue-500/10 text-blue-400' : 'bg-green-500/10 text-green-400'}">
+                                <div class="p-2 rounded-lg ${t.type === 'buy' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}">
                                     <i data-lucide="${t.type === 'buy' ? 'arrow-down-left' : 'arrow-up-right'}" class="w-4 h-4"></i>
                                 </div>
                                 <div>
@@ -508,11 +508,15 @@ $transactions = $stmt->fetchAll();
             itemsToShow = 20;
             ['all', 'buy', 'sell'].forEach(t => {
                 const btn = document.getElementById('btn-' + t);
-                btn.classList.remove('bg-blue-600', 'text-white', 'shadow-lg');
+                btn.classList.remove('bg-blue-600', 'bg-emerald-600', 'bg-rose-600', 'text-white', 'shadow-lg');
                 btn.classList.add('text-slate-400');
             });
             const activeBtn = document.getElementById('btn-' + type);
-            activeBtn.classList.add('bg-blue-600', 'text-white', 'shadow-lg');
+            let activeClass = 'bg-blue-600';
+            if (type === 'buy') activeClass = 'bg-emerald-600';
+            if (type === 'sell') activeClass = 'bg-rose-600';
+
+            activeBtn.classList.add(activeClass, 'text-white', 'shadow-lg');
             activeBtn.classList.remove('text-slate-400');
             renderTransactions();
         }
