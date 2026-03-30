@@ -180,31 +180,31 @@ $transactions = $stmt->fetchAll();
         <i data-lucide="check-circle"></i> <span id="toast-msg">تم الحفظ بنجاح!</span>
     </div>
 
-    <nav class="max-w-6xl mx-auto bg-[#1e293b]/50 border-b border-slate-800 py-3 px-4 md:px-8 flex justify-between items-center mb-8 glass-card">
-        <div class="flex items-center gap-3 group">
-            <div class="w-10 h-10 bg-yellow-500/10 rounded-full flex items-center justify-center border border-yellow-500/20 group-hover:scale-110 transition"><i data-lucide="user-lock" class="w-6 h-6 text-yellow-500"></i></div>
-            <div class="flex flex-col text-right"><span class="text-[10px] text-slate-500 font-bold uppercase italic">حساب التاجر</span><span class="text-sm font-black text-white"><?php echo htmlspecialchars($username); ?></span></div>
+    <nav class="max-w-6xl mx-auto bg-[#1e293b]/50 border-b border-slate-800 py-3 px-3 md:px-8 flex justify-between items-center mb-6 md:mb-8 glass-card">
+        <div class="flex items-center gap-2 md:gap-3 group">
+            <div class="w-8 h-8 md:w-10 md:h-10 bg-yellow-500/10 rounded-full flex items-center justify-center border border-yellow-500/20 group-hover:scale-110 transition"><i data-lucide="user-lock" class="w-4 h-4 md:w-6 md:h-6 text-yellow-500"></i></div>
+            <div class="flex flex-col text-right"><span class="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase italic">حساب التاجر</span><span class="text-xs md:text-sm font-black text-white"><?php echo htmlspecialchars($username); ?></span></div>
         </div>
-        <a href="logout.php" onclick="return confirm('خروج؟')" class="flex items-center gap-2 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white px-5 py-2.5 rounded text-xs font-black border border-rose-500/20 transition-all"><span>خروج آمن</span> <i data-lucide="log-out" class="w-4 h-4"></i></a>
+        <a href="logout.php" onclick="return confirm('خروج؟')" class="flex items-center gap-2 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white px-3 md:px-5 py-2 rounded text-[10px] md:text-xs font-black border border-rose-500/20 transition-all"><span>خروج آمن</span> <i data-lucide="log-out" class="w-3.5 h-3.5 md:w-4 md:h-4"></i></a>
     </nav>
 
     <div class="max-w-6xl mx-auto">
-        <header class="flex flex-col md:flex-row justify-between items-center gap-6 mb-10 text-right">
-            <div>
-                <h1 class="text-3xl font-black text-yellow-500 flex items-center gap-3 italic"><i data-lucide="shield-check"></i> LEDGER PRO</h1>
-                <div class="flex gap-4 mt-3">
-                    <div class="text-xs text-blue-400 font-bold border-l border-slate-700 pl-4 uppercase tracking-tighter">شراء: <span class="text-white"><?php echo number_format($def_buy, 2); ?></span></div>
-                    <div class="text-xs text-green-400 font-bold border-l border-slate-700 pl-4 uppercase tracking-tighter">بيع: <span class="text-white"><?php echo number_format($def_sell, 2); ?></span></div>
-                    <button onclick="document.getElementById('settingsModal').classList.remove('hidden')" class="text-yellow-500 hover:scale-125 transition"><i data-lucide="sliders"></i></button>
+        <header class="flex flex-col md:flex-row justify-between items-center gap-6 mb-8 md:mb-10 text-right">
+            <div class="text-center md:text-right">
+                <h1 class="text-2xl md:text-3xl font-black text-yellow-500 flex items-center justify-center md:justify-start gap-3 italic"><i data-lucide="shield-check"></i> LEDGER PRO</h1>
+                <div class="flex justify-center md:justify-start gap-4 mt-3">
+                    <div class="text-[10px] md:text-xs text-blue-400 font-bold border-l border-slate-700 pl-4 uppercase tracking-tighter">شراء: <span class="text-white"><?php echo number_format($def_buy, 2); ?></span></div>
+                    <div class="text-[10px] md:text-xs text-green-400 font-bold border-l border-slate-700 pl-4 uppercase tracking-tighter">بيع: <span class="text-white"><?php echo number_format($def_sell, 2); ?></span></div>
+                    <button onclick="document.getElementById('settingsModal').classList.remove('hidden')" class="text-yellow-500 hover:scale-125 transition"><i data-lucide="sliders" class="w-4 h-4 md:w-5 md:h-5"></i></button>
                 </div>
             </div>
 
-            <div class="flex items-center gap-3">
-                <a href="reports.php" class="bg-gradient-to-l from-indigo-700 to-blue-900 hover:from-indigo-600 hover:to-blue-800 text-white px-6 py-3.5 rounded-xl font-black flex items-center gap-2 shadow-lg shadow-indigo-900/40 transition-all border border-indigo-500/30 active:scale-95">
-                    <i data-lucide="calendar-days" class="w-4 h-4 text-indigo-300"></i> الأرشيف والتحليل
+            <div class="flex flex-wrap justify-center md:justify-end items-center gap-2 md:gap-3">
+                <a href="reports.php" class="glass-card bg-white/5 hover:bg-white/10 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all border border-white/10 active:scale-95">
+                    <i data-lucide="calendar-days" class="w-3.5 h-3.5 text-blue-400"></i> الأرشيف والتحليل
                 </a>
-                <button onclick="openReportsModal()" class="bg-gradient-to-l from-emerald-600 to-teal-800 hover:from-emerald-500 hover:to-teal-700 text-white px-6 py-3.5 rounded-xl font-black flex items-center gap-2 shadow-lg shadow-emerald-900/40 transition-all border border-emerald-500/30 active:scale-95">
-                    <i data-lucide="layout-dashboard" class="w-4 h-4 text-emerald-300"></i> عرض التقارير
+                <button onclick="openReportsModal()" class="glass-card bg-white/5 hover:bg-white/10 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all border border-white/10 active:scale-95">
+                    <i data-lucide="layout-dashboard" class="w-3.5 h-3.5 text-emerald-400"></i> عرض التقارير
                 </button>
             </div>
         </header>
@@ -216,15 +216,15 @@ $transactions = $stmt->fetchAll();
         </div>
 
     <!-- نافذة التقارير المنبثقة -->
-    <div id="reportsModal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-[500] overflow-y-auto">
-        <div class="glass-card w-full max-w-5xl p-6 md:p-10 border-2 border-emerald-500/30 shadow-2xl my-auto">
-            <div class="flex justify-between items-center mb-8 pb-4 border-b border-slate-800">
-                <h2 class="text-xl font-black text-emerald-500 flex items-center gap-3 italic uppercase tracking-widest"><i data-lucide="bar-chart-horizontal"></i> الإحصائيات التفصيلية</h2>
-                <button onclick="closeReportsModal()" class="bg-slate-800 p-2 rounded-lg text-white hover:bg-rose-500 transition"><i data-lucide="x"></i></button>
+    <div id="reportsModal" class="hidden fixed inset-0 bg-black/95 flex items-start md:items-center justify-center p-2 md:p-4 z-[500] overflow-y-auto">
+        <div class="glass-card w-full max-w-5xl p-4 md:p-10 border-2 border-emerald-500/30 shadow-2xl my-4 md:my-auto">
+            <div class="flex justify-between items-center mb-6 md:mb-8 pb-4 border-b border-slate-800">
+                <h2 class="text-lg md:text-xl font-black text-emerald-500 flex items-center gap-3 italic uppercase tracking-widest"><i data-lucide="bar-chart-horizontal"></i> الإحصائيات التفصيلية</h2>
+                <button onclick="closeReportsModal()" class="bg-slate-800 p-2 rounded-lg text-white hover:bg-rose-500 transition"><i data-lucide="x" class="w-4 h-4"></i></button>
             </div>
 
             <!-- شبكة البطاقات داخل النافذة -->
-            <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4 mb-8">
                 <div class="glass-card p-4 border-r-4 border-blue-500 bg-slate-900/40"><span class="text-slate-400 text-[9px] font-bold block mb-1 uppercase">صافي الربح ($)</span><h3 class="text-sm font-black text-blue-400 tabular-nums">$<?php echo number_format($total_profit_usd_all, 2); ?></h3></div>
                 <div class="glass-card p-4 border-r-4 border-emerald-500 bg-slate-900/40"><span class="text-slate-400 text-[9px] font-bold block mb-1 uppercase">صافي الربح (YER)</span><h3 class="text-sm font-black text-emerald-400 tabular-nums"><?php echo number_format($total_profit_yer_all, 2); ?></h3></div>
                 <div class="glass-card p-4 border-r-4 border-purple-500 bg-slate-900/40"><span class="text-slate-400 text-[9px] font-bold block mb-1 uppercase italic">متوسط الشراء (WAC)</span><h3 class="text-sm font-black text-purple-400 tabular-nums"><?php echo number_format($avg_buy_price, 2); ?></h3></div>
