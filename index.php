@@ -80,46 +80,40 @@ $daily_fees_stmt->execute([$user_id, $today]);
 $daily_fees_usdt_val = $daily_fees_stmt->fetchColumn() ?: 0;
 $daily_fees_yer_val = $daily_fees_usdt_val * $def_buy;
 
-// و. جلب بيانات الرسم البياني (آخر 7 أيام)
-// و. جلب بيانات الرسم البياني (آخر 20 عملية بيع - منحنى تراكمي)
-$chart_stmt = $pdo->prepare("
-    SELECT created_at, ((price_per_unit - ?) * crypto_amount) as op_profit 
-    FROM transactions 
-    WHERE user_id = ? AND type = 'sell' 
-    ORDER BY id ASC LIMIT 50
-");
-$chart_stmt->execute([$avg_buy_price, $user_id]);
-$chart_raw_data = $chart_stmt->fetchAll();
-
-// جلب النطاق الزمني المختار (الافتراضي هو 'pulse' للعمليات اللحظية)
+// جلب النطاق الزمني المختار (الافتراضي هو 'day' لعمليات اليوم)
 // و. جلب بيانات الرسم البياني (منفصلة تماماً حسب النوع)
-$range = $_GET['range'] ?? 'pulse';
+$range = $_GET['range'] ?? 'day';
 $chart_labels = [];
 $chart_values = [];
 $cumulative_profit = 0;
 
-// جلب الربح الإجمالي السابق (للبدء منه في الرسم التراكمي للأسبوع والشهر)
-$initial_profit_stmt = $pdo->prepare("SELECT SUM((price_per_unit - ?) * crypto_amount) FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) < ?");
-
-if ($range === 'pulse') {
-    // وضع النبض: آخر 20 عملية بيع فردية مرتبة زمنياً بدقة
-    $stmt = $pdo->prepare("SELECT created_at, ((price_per_unit - ?) * crypto_amount) as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' ORDER BY id ASC LIMIT 30");
-    $stmt->execute([$avg_buy_price, $user_id]);
+if ($range === 'day') {
+    // وضع اليوم: عمليات البيع لهذا اليوم مرتبة زمنياً (بحد أقصى 50 عملية)
+    $stmt = $pdo->prepare("SELECT created_at, ((price_per_unit - ?) * crypto_amount) as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) = ? ORDER BY id ASC LIMIT 50");
+    $stmt->execute([$avg_buy_price, $user_id, $today]);
     $data_rows = $stmt->fetchAll();
     
-    foreach ($data_rows as $index => $data) {
+    foreach ($data_rows as $data) {
         $cumulative_profit += (float)$data['op_profit'];
-        $chart_labels[] = ($index + 1); // نستخدم أرقام تسلسلية للعمليات لعدم تداخل الوقت
+        $chart_labels[] = date('h:i A', strtotime($data['created_at']));
+        $chart_values[] = round($cumulative_profit, 2);
+    }
+} else if ($range === 'pulse') {
+    // وضع النبض: آخر 30 عملية بيع فردية مرتبة زمنياً (بغض النظر عن اليوم)
+    $stmt = $pdo->prepare("SELECT created_at, ((price_per_unit - ?) * crypto_amount) as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' ORDER BY id DESC LIMIT 30");
+    $stmt->execute([$avg_buy_price, $user_id]);
+    $data_rows = array_reverse($stmt->fetchAll());
+
+    foreach ($data_rows as $data) {
+        $cumulative_profit += (float)$data['op_profit'];
+        $chart_labels[] = date('h:i A', strtotime($data['created_at']));
         $chart_values[] = round($cumulative_profit, 2);
     }
 } else {
     // وضع أسبوعي أو شهري
     $days_count = ($range === 'month') ? 30 : 7;
-    $start_date = date('Y-m-d', strtotime("-".($days_count-1)." days"));
-    
-    // جلب الربح الذي تحقق قبل هذه الفترة للبدء به كقاعدة للرسم
-    $initial_profit_stmt->execute([$avg_buy_price, $user_id, $start_date]);
-    $cumulative_profit = (float)($initial_profit_stmt->fetchColumn() ?: 0);
+    // نبدأ الحساب من 0 لبيان النمو خلال الفترة المختارة فقط
+    $cumulative_profit = 0;
 
     for ($i = $days_count - 1; $i >= 0; $i--) {
         $current_d = date('Y-m-d', strtotime("-$i days"));
@@ -133,15 +127,10 @@ if ($range === 'pulse') {
         $chart_values[] = round($cumulative_profit, 2);
     }
 }
-// إضافة نقطة البداية (صفر)
-$chart_labels[] = "البداية";
-$chart_values[] = 0;
 
-foreach ($chart_raw_data as $data) {
-    $cumulative_profit += (float)$data['op_profit'];
-    $chart_labels[] = date('H:i', strtotime($data['created_at'])); // عرض الوقت بالساعة والدقيقة
-    $chart_values[] = round($cumulative_profit, 2);
-}
+// إضافة نقطة البداية (صفر) في بداية المصفوفة لضمان منطقية الرسم
+array_unshift($chart_labels, "البداية");
+array_unshift($chart_values, 0);
 
 // ز. جلب السجل التاريخي (آخر 500 عملية)
 $stmt = $pdo->prepare("SELECT * FROM transactions WHERE user_id = ? ORDER BY id DESC LIMIT 500");
@@ -245,9 +234,10 @@ $transactions = $stmt->fetchAll();
         </h2>
         
         <div class="flex bg-slate-900/80 p-1 rounded border border-slate-700">
-            <a href="?range=pulse" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='pulse'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">النبض</a>
+            <a href="?range=day" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='day'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">اليوم</a>
             <a href="?range=week" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='week'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">أسبوعي</a>
             <a href="?range=month" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='month'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">شهري</a>
+            <a href="?range=pulse" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='pulse'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">النبض</a>
         </div>
     </div>
 
