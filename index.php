@@ -35,8 +35,8 @@ $buy_stats_stmt->execute([$user_id]);
 $buy_stats = $buy_stats_stmt->fetch();
 $avg_buy_price = ($buy_stats['total_bought'] > 0) ? ($buy_stats['total_spent'] / $buy_stats['total_bought']) : 0;
 
-// أ. حساب الأرباح التراكمية (YER / USD)
-$profit_stmt = $pdo->prepare("SELECT SUM((price_per_unit - ?) * crypto_amount) as net_profit FROM transactions WHERE user_id = ? AND type='sell'");
+// أ. حساب الأرباح التراكمية (YER / USD) بدقة متناهية تشمل تكلفة الرسوم
+$profit_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid - (? * total_crypto_deducted)) as net_profit FROM transactions WHERE user_id = ? AND type='sell'");
 $profit_stmt->execute([$avg_buy_price, $user_id]);
 $total_profit_yer_all = $profit_stmt->fetchColumn() ?: 0;
 $total_profit_usd_all = ($def_buy > 0) ? ($total_profit_yer_all / $def_buy) : 0;
@@ -69,8 +69,8 @@ $total_out->execute([$user_id]);
 $sum_out = $total_out->fetchColumn() ?: 0;
 $remaining_stock = $sum_in - $sum_out;
 
-// هـ. حسابات اليوم (أرباح ورسوم اليوم فقط)
-$daily_profit_stmt = $pdo->prepare("SELECT SUM((price_per_unit - ?) * crypto_amount) FROM transactions WHERE user_id = ? AND type='sell' AND DATE(created_at) = ?");
+// هـ. حسابات اليوم (أرباح ورسوم اليوم فقط) بدقة
+$daily_profit_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid - (? * total_crypto_deducted)) FROM transactions WHERE user_id = ? AND type='sell' AND DATE(created_at) = ?");
 $daily_profit_stmt->execute([$avg_buy_price, $user_id, $today]);
 $daily_profit_yer_val = $daily_profit_stmt->fetchColumn() ?: 0;
 $daily_profit_usd_val = ($def_buy > 0) ? ($daily_profit_yer_val / $def_buy) : 0;
@@ -89,7 +89,7 @@ $cumulative_profit = 0;
 
 if ($range === 'day') {
     // وضع اليوم: عمليات البيع لهذا اليوم مرتبة زمنياً (بحد أقصى 50 عملية)
-    $stmt = $pdo->prepare("SELECT created_at, ((price_per_unit - ?) * crypto_amount) as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) = ? ORDER BY id ASC LIMIT 50");
+    $stmt = $pdo->prepare("SELECT created_at, (total_fiat_paid - (? * total_crypto_deducted)) as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) = ? ORDER BY id ASC LIMIT 50");
     $stmt->execute([$avg_buy_price, $user_id, $today]);
     $data_rows = $stmt->fetchAll();
     
@@ -100,7 +100,7 @@ if ($range === 'day') {
     }
 } else if ($range === 'pulse') {
     // وضع النبض: آخر 30 عملية بيع فردية مرتبة زمنياً (بغض النظر عن اليوم)
-    $stmt = $pdo->prepare("SELECT created_at, ((price_per_unit - ?) * crypto_amount) as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' ORDER BY id DESC LIMIT 30");
+    $stmt = $pdo->prepare("SELECT created_at, (total_fiat_paid - (? * total_crypto_deducted)) as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' ORDER BY id DESC LIMIT 30");
     $stmt->execute([$avg_buy_price, $user_id]);
     $data_rows = array_reverse($stmt->fetchAll());
 
@@ -119,7 +119,7 @@ if ($range === 'day') {
         $current_d = date('Y-m-d', strtotime("-$i days"));
         $chart_labels[] = date('m-d', strtotime($current_d));
         
-        $day_stmt = $pdo->prepare("SELECT SUM((price_per_unit - ?) * crypto_amount) FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) = ?");
+        $day_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid - (? * total_crypto_deducted)) FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) = ?");
         $day_stmt->execute([$avg_buy_price, $user_id, $current_d]);
         $day_val = (float)($day_stmt->fetchColumn() ?: 0);
         
@@ -345,11 +345,25 @@ $transactions = $stmt->fetchAll();
             <form action="update.php" method="POST" class="space-y-6">
                 <input type="hidden" name="id" id="edit_id">
                 <div><label class="block text-xs text-slate-400 mb-2 font-black italic tracking-widest uppercase">تعديل التاريخ</label><input type="datetime-local" name="transaction_date" id="edit_date" required class="input-dark font-black text-yellow-500 border-yellow-500/20 tabular-nums text-center"></div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div><label class="block text-xs text-slate-400 mb-1 font-black">الكمية</label><input type="number" step="any" name="amount" id="edit_amount" required class="input-dark font-black tabular-nums text-center"></div>
-                    <div><label class="block text-xs text-slate-400 mb-1 font-black">السعر</label><input type="number" step="any" name="price" id="edit_price" required class="input-dark font-black tabular-nums text-center"></div>
+
+                <div>
+                    <label class="block text-xs text-slate-400 mb-2 font-black italic tracking-widest uppercase text-right">نوع العملية</label>
+                    <select name="type" id="edit_type" class="input-dark font-bold text-yellow-500 text-center cursor-pointer uppercase">
+                        <option value="buy">شراء (تستلم)</option>
+                        <option value="sell">بيع (ترسل)</option>
+                    </select>
                 </div>
-                <div><label class="block text-xs text-yellow-500 mb-2 font-black uppercase italic underline text-center">تعديل الرسوم (USDT)</label><input type="number" step="any" name="binance_fee" id="edit_binance_fee" class="input-dark text-yellow-500 font-black tabular-nums text-center"></div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div><label class="block text-xs text-slate-400 mb-1 font-black">الكمية Net</label><input type="number" step="any" name="amount" id="edit_amount" required class="input-dark font-black tabular-nums text-center"></div>
+                    <div><label class="block text-xs text-slate-400 mb-1 font-black">السعر YER</label><input type="number" step="any" name="price" id="edit_price" required class="input-dark font-black tabular-nums text-center"></div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div><label class="block text-xs text-yellow-500 mb-2 font-black uppercase italic text-center">رسوم (USDT)</label><input type="number" step="any" name="binance_fee" id="edit_binance_fee" class="input-dark text-yellow-500 font-black tabular-nums text-center"></div>
+                    <div id="editManualFeeContainer"><label class="block text-xs text-blue-400 mb-2 font-black uppercase italic text-center">رسوم صراف (YER)</label><input type="number" step="any" name="manual_fee" id="edit_manual_fee" class="input-dark text-blue-400 font-black tabular-nums text-center"></div>
+                </div>
+
                 <div class="flex gap-4 pt-4"><button type="submit" class="flex-1 btn-primary-glass py-4 font-black text-white uppercase italic">تحديث</button><button type="button" onclick="document.getElementById('editModal').classList.add('hidden')" class="flex-1 bg-slate-800 py-4 text-xs font-black text-white uppercase italic">تراجع</button></div>
             </form>
         </div>
@@ -433,13 +447,20 @@ $transactions = $stmt->fetchAll();
 
         function openEditModal(data) {
             document.getElementById('edit_id').value = data.id;
+            document.getElementById('edit_type').value = data.type;
             document.getElementById('edit_amount').value = data.crypto_amount;
             document.getElementById('edit_price').value = data.price_per_unit;
             document.getElementById('edit_binance_fee').value = data.binance_fee;
+            document.getElementById('edit_manual_fee').value = data.manual_fee || 0;
+            document.getElementById('editManualFeeContainer').style.display = data.type === 'sell' ? 'none' : 'block';
             let date = new Date(data.created_at);
             document.getElementById('edit_date').value = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
             document.getElementById('editModal').classList.remove('hidden');
         }
+
+        document.getElementById('edit_type').addEventListener('change', function() {
+            document.getElementById('editManualFeeContainer').style.display = this.value === 'sell' ? 'none' : 'block';
+        });
 
         // --- نظام السجل المتطور ---
         const rawTransactions = <?php echo json_encode($transactions); ?>;
