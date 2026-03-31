@@ -458,9 +458,26 @@ $transactions = $stmt->fetchAll();
             document.getElementById('editModal').classList.remove('hidden');
         }
 
+        function updateEditCalculations() {
+            const amount = parseFloat(document.getElementById('edit_amount').value) || 0;
+            const type = document.getElementById('edit_type').value;
+            const feeInput = document.getElementById('edit_binance_fee');
+
+            if (amount > 0) {
+                if (type === 'buy') {
+                    const gross = amount / 0.999;
+                    feeInput.value = (gross - amount).toFixed(2);
+                } else {
+                    feeInput.value = (amount * 0.001).toFixed(2);
+                }
+            }
+        }
+
         document.getElementById('edit_type').addEventListener('change', function() {
             document.getElementById('editManualFeeContainer').style.display = this.value === 'sell' ? 'none' : 'block';
+            updateEditCalculations();
         });
+        document.getElementById('edit_amount').addEventListener('input', updateEditCalculations);
 
         // --- نظام السجل المتطور ---
         const rawTransactions = <?php echo json_encode($transactions); ?>;
