@@ -387,6 +387,8 @@ $transactions = $stmt->fetchAll();
             renderTransactions();
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('status') === 'success') { showToast("تم الحفظ بنجاح وتحديث ميزان الأرباح!"); window.history.replaceState({}, document.title, "index.php#form-section"); }
+            if (urlParams.get('updated') === '1') { showToast("تم تحديث العملية بنجاح!"); window.history.replaceState({}, document.title, "index.php#form-section"); }
+            if (urlParams.get('deleted') === '1') { showToast("تم حذف العملية بنجاح!"); window.history.replaceState({}, document.title, "index.php#form-section"); }
             if (window.location.hash === "#form-section") { document.getElementById('form-section').scrollIntoView({ behavior: 'smooth' }); }
             if (window.location.hash === "#reportsModal") { document.getElementById('reportsModal').classList.remove('hidden'); }
         }
