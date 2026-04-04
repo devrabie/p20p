@@ -51,8 +51,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         body { font-family: 'Tajawal', sans-serif; background-color: #0f172a; }
         .input-dark { background-color: #0f172a; border: 1px solid #334155; color: white; padding: 14px; border-radius: 12px; width: 100%; outline: none; transition: 0.3s; }
         .input-dark:focus { border-color: #eab308; box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.15); }
-        .btn-yellow { background-color: #eab308; color: #0f172a; font-weight: 800; border-radius: 14px; transition: all 0.2s; }
-        .btn-yellow:hover { background-color: #facc15; transform: translateY(-2px); }
+        .btn-primary-glass { background: linear-gradient(135deg, rgba(79, 70, 229, 0.8) 0%, rgba(30, 58, 138, 0.8) 100%); backdrop-filter: blur(10px); color: white; border: 1px solid rgba(255, 255, 255, 0.1); font-weight: 800; border-radius: 12px !important; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 4px 15px -3px rgba(0, 0, 0, 0.4); }
+        .btn-primary-glass:hover { transform: translateY(-2px); background: linear-gradient(135deg, rgba(99, 102, 241, 0.9) 0%, rgba(37, 99, 235, 0.9) 100%); box-shadow: 0 10px 25px -5px rgba(67, 56, 202, 0.4); border-color: rgba(255, 255, 255, 0.2); }
+        .btn-primary-glass:active { transform: scale(0.97); }
     </style>
 </head>
 <body class="text-white flex items-center justify-center min-h-screen p-4">
@@ -98,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 <input type="password" name="password" required placeholder="••••••••" class="input-dark">
             </div>
 
-            <button type="submit" class="w-full btn-yellow py-4 shadow-lg shadow-yellow-900/20 flex items-center justify-center gap-2 active:scale-95 transition">
+            <button type="submit" class="w-full btn-primary-glass py-4 flex items-center justify-center gap-2 active:scale-95 transition">
                 تسجيل الدخول <i data-lucide="log-in" class="w-4 h-4"></i>
             </button>
         </form>
