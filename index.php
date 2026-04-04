@@ -494,8 +494,13 @@ $transactions = $stmt->fetchAll();
 
         function toggleDateInput() {
             const isChecked = document.getElementById('enable_backdate').checked;
+            const dateInput = document.getElementById('manual_date');
             document.getElementById('date_container').style.display = isChecked ? 'block' : 'none';
             document.getElementById('live_clock_display').style.display = isChecked ? 'none' : 'block';
+
+            if (!isChecked) {
+                dateInput.value = ""; // تصفير التاريخ عند التعطيل لضمان استخدام وقت السيرفر الحالي
+            }
         }
 
         function openEditModal(data) {
