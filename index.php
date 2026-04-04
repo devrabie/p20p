@@ -313,8 +313,16 @@ $transactions = $stmt->fetchAll();
 
         <!-- الصف الرئيسي: المخزون وربح اليوم -->
         <div class="grid grid-cols-2 gap-4 mb-10">
-            <div class="glass-card p-5 border-r-4 border-yellow-500 shadow-xl"><span class="text-slate-400 text-[10px] font-bold block mb-1 uppercase italic tracking-tighter">المخزون المتوفر (Stock)</span><h3 class="text-lg md:text-xl font-black text-yellow-500 tabular-nums"><?php echo number_format($remaining_stock, 2); ?></h3></div>
-            <div class="glass-card p-4 bg-blue-500/10 border border-blue-500/20"><span class="text-[9px] text-blue-500 font-black uppercase mb-1 block">ربح اليوم ($)</span><h3 class="text-lg font-black text-blue-400 tabular-nums">$<?php echo number_format($daily_profit_usd_val, 2); ?></h3></div>
+            <div class="glass-card p-5 border-r-4 border-yellow-500 shadow-xl">
+                <span class="text-slate-400 text-[10px] font-bold block mb-1 uppercase italic tracking-tighter">المخزون المتوفر (Stock)</span>
+                <h3 class="text-lg md:text-xl font-black text-yellow-500 tabular-nums"><?php echo number_format($remaining_stock, 2); ?></h3>
+                <p class="text-[9px] text-slate-500 font-bold mt-1">متوسط الشراء: <?php echo number_format($avg_buy_price, 1); ?></p>
+            </div>
+            <div class="glass-card p-5 bg-blue-500/10 border border-blue-500/20">
+                <span class="text-[9px] text-blue-500 font-black uppercase mb-1 block">ربح اليوم</span>
+                <h3 class="text-lg font-black text-blue-400 tabular-nums">$<?php echo number_format($daily_profit_usd_val, 2); ?></h3>
+                <p class="text-[9px] text-blue-500/70 font-bold mt-1"><?php echo number_format($daily_profit_yer_val); ?> YER</p>
+            </div>
         </div>
 
     <!-- نافذة التقارير المنبثقة -->
