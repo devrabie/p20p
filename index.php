@@ -211,6 +211,24 @@ $transactions = $stmt->fetchAll();
             </div>
         </header>
 
+        <!-- الشريط الذكي (Smart Banner) -->
+        <?php if($remaining_stock > 0):
+            $break_even_price = $avg_buy_price * 1.001;
+        ?>
+        <div class="glass-card p-4 mb-6 border-l-4 border-blue-500 bg-blue-500/5 animate-pulse">
+            <div class="flex items-center gap-3">
+                <i data-lucide="info" class="text-blue-500 w-5 h-5"></i>
+                <div>
+                    <p class="text-[10px] text-blue-400 font-bold uppercase tracking-widest">تنبيه ذكي: سعر التعادل (Break-even)</p>
+                    <p class="text-sm font-black text-white italic tabular-nums">
+                        أقل سعر بيع للربح: <span class="text-blue-400"><?php echo number_format($break_even_price, 2); ?> YER</span>
+                        <span class="text-[9px] text-slate-500 font-normal mr-2">(أي سعر أقل من هذا سيعني خسارة محققة بسبب الرسوم ومتوسط الشراء)</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <!-- الصف الرئيسي: المخزون وربح اليوم -->
         <div class="grid grid-cols-2 gap-4 mb-10">
             <div class="glass-card p-5 border-r-4 border-yellow-500 shadow-xl"><span class="text-slate-400 text-[10px] font-bold block mb-1 uppercase italic tracking-tighter">المخزون المتوفر (Stock)</span><h3 class="text-lg md:text-xl font-black text-yellow-500 tabular-nums"><?php echo number_format($remaining_stock, 2); ?></h3></div>
@@ -259,6 +277,24 @@ $transactions = $stmt->fetchAll();
                     <div id="chart-scroll-container" style="height: 300px; min-width: 100%;">
                         <canvas id="profitChart"></canvas>
                     </div>
+                </div>
+            </div>
+
+            <!-- قسم شفافية الأرباح -->
+            <div class="mt-8 pt-8 border-t border-slate-800">
+                <h3 class="text-sm font-black text-blue-400 mb-4 flex items-center gap-2 italic uppercase"><i data-lucide="help-circle"></i> كيف يتم احتساب الأرباح؟</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-900/40 p-6 rounded-xl border border-slate-800/50">
+                    <div>
+                        <p class="text-xs text-slate-400 font-bold mb-2">المعادلة المستخدمة:</p>
+                        <div class="bg-black/30 p-4 rounded-lg font-mono text-[11px] text-emerald-500 text-left dir-ltr">
+                            Profit = (Qty * SellPrice) - (WAC * (Qty + BinanceFee))
+                        </div>
+                    </div>
+                    <ul class="text-[11px] text-slate-500 space-y-2">
+                        <li class="flex items-start gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 mt-0.5"></i> يتم ضرب كمية البيع في سعر البيع للحصول على العائد الإجمالي.</li>
+                        <li class="flex items-start gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 mt-0.5"></i> يتم خصم التكلفة الحقيقية (كمية البيع + الرسوم) مضروبة في متوسط سعر الشراء العام (WAC).</li>
+                        <li class="flex items-start gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 mt-0.5"></i> متوسط سعر الشراء (WAC) يتغير تلقائياً مع كل عملية شراء جديدة تقوم بها.</li>
+                    </ul>
                 </div>
             </div>
 
@@ -432,10 +468,30 @@ $transactions = $stmt->fetchAll();
         const editAjaxForm = document.getElementById('edit-ajax-form');
         editAjaxForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            saveEditModalState();
-            const btn = document.getElementById('edit-submit-btn'); btn.disabled = true; btn.innerHTML = '<i data-lucide="loader" class="animate-spin w-4 h-4"></i>'; lucide.createIcons();
+            const btn = document.getElementById('edit-submit-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader" class="animate-spin w-4 h-4"></i>';
+            lucide.createIcons();
+
             fetch('update.php', { method: 'POST', body: new FormData(this) })
-            .then(res => { if (res.ok) { window.location.href="index.php?updated=1"; window.location.reload(); } else { alert("خطأ في التحديث"); btn.disabled = false; btn.innerText = "تحديث"; } });
+            .then(res => {
+                if (res.ok) {
+                    window.location.href="index.php?updated=1";
+                    // إذا لم يتم التوجيه لسبب ما
+                    setTimeout(() => window.location.reload(), 500);
+                } else {
+                    alert("خطأ في التحديث: تأكد من صحة البيانات");
+                    btn.disabled = false;
+                    btn.innerText = "تحديث";
+                    lucide.createIcons();
+                }
+            })
+            .catch(err => {
+                alert("حدث خطأ تقني أثناء التحديث");
+                btn.disabled = false;
+                btn.innerText = "تحديث";
+                lucide.createIcons();
+            });
         });
 
         const amountInput = document.getElementById('crypto_amount_input');
@@ -459,13 +515,18 @@ $transactions = $stmt->fetchAll();
                     document.getElementById('prev-gross').textContent = gross.toFixed(4);
 
                     const grossYER = gross * price;
-                    // أتمتة رسوم الصراف بناءً على إجمالي المبلغ
-                    let autoFee = 0;
-                    if (grossYER > 300000) autoFee = 200;
-                    else if (grossYER > 90000) autoFee = 50;
 
-                    manualFiatInput.value = autoFee;
-                    document.getElementById('prev-total-yer').textContent = (grossYER + autoFee).toLocaleString();
+                    // أتمتة رسوم الصراف بناءً على إجمالي المبلغ - فقط إذا لم يقم المستخدم بتعديله يدوياً
+                    let finalFee = 0;
+                    if (manualFiatInput.dataset.manualModified === "true") {
+                        finalFee = parseFloat(manualFiatInput.value) || 0;
+                    } else {
+                        if (grossYER > 300000) finalFee = 200;
+                        else if (grossYER > 90000) finalFee = 50;
+                        manualFiatInput.value = finalFee;
+                    }
+
+                    document.getElementById('prev-total-yer').textContent = (grossYER + finalFee).toLocaleString();
                 } else {
                     const fee = amount * 0.001;
                     feeInput.value = fee.toFixed(2);
@@ -477,13 +538,23 @@ $transactions = $stmt->fetchAll();
                 calcPreview.classList.add('hidden');
                 feeInput.value = "0.00";
                 manualFiatInput.value = 0;
+                manualFiatInput.dataset.manualModified = "false";
             }
         }
 
         amountInput.addEventListener('input', updateCalculations);
         priceInput.addEventListener('input', () => { updateCalculations(); saveMainFormState(); });
-        manualFiatInput.addEventListener('input', () => { updateCalculations(); saveMainFormState(); });
-        typeSelect.addEventListener('change', () => { handleTypeChange(); updateCalculations(); saveMainFormState(); });
+        manualFiatInput.addEventListener('input', () => {
+            manualFiatInput.dataset.manualModified = "true";
+            updateCalculations();
+            saveMainFormState();
+        });
+        typeSelect.addEventListener('change', () => {
+            manualFiatInput.dataset.manualModified = "false";
+            handleTypeChange();
+            updateCalculations();
+            saveMainFormState();
+        });
         document.getElementById('enable_backdate').addEventListener('change', saveMainFormState);
         document.getElementById('manual_date').addEventListener('input', saveMainFormState);
 
