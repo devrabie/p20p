@@ -513,8 +513,10 @@ $transactions = $stmt->fetchAll();
             if (savedDate) {
                 document.getElementById('edit_date').value = savedDate;
             } else {
-                let date = new Date(data.created_at);
-                document.getElementById('edit_date').value = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                // Formatting for datetime-local input (YYYY-MM-DDTHH:MM)
+                // Created_at is "YYYY-MM-DD HH:MM:SS" in Yemen time
+                let dt = data.created_at.replace(" ", "T").substring(0, 16);
+                document.getElementById('edit_date').value = dt;
             }
 
             document.getElementById('editModal').classList.remove('hidden');
@@ -576,7 +578,13 @@ $transactions = $stmt->fetchAll();
             const visibleResults = results.slice(0, itemsToShow);
 
             visibleResults.forEach(t => {
-                const dateOnly = new Date(t.created_at).toLocaleDateString('ar-YE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                // استخدام وقت اليمن الصريح لضمان تطابق الفرز والواجهة مع الخادم
+                const txDate = new Date(t.created_at + ' GMT+0300');
+                const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Aden' };
+                const timeOptions = { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Aden' };
+
+                const dateOnly = txDate.toLocaleDateString('ar-YE', dateOptions);
+
                 if (dateOnly !== lastDate) {
                     container.innerHTML += `<div class="sticky top-0 z-10 bg-slate-900/90 backdrop-blur px-4 py-1.5 rounded-lg border border-slate-800 text-[10px] font-black text-blue-400 mt-6 mb-2 flex items-center gap-2"><i data-lucide="calendar" class="w-3 h-3"></i> ${dateOnly}</div>`;
                     lastDate = dateOnly;
@@ -591,7 +599,7 @@ $transactions = $stmt->fetchAll();
                                 </div>
                                 <div>
                                     <p class="text-sm font-black tabular-nums">${parseFloat(t.crypto_amount).toLocaleString()} <span class="text-[10px] opacity-50">USDT</span></p>
-                                    <p class="text-[9px] text-slate-500 font-bold">${new Date(t.created_at).toLocaleTimeString('ar-YE', {hour:'2-digit', minute:'2-digit'})}</p>
+                                    <p class="text-[9px] text-slate-500 font-bold">${txDate.toLocaleTimeString('ar-YE', timeOptions)}</p>
                                 </div>
                             </div>
                             <div class="text-left">
