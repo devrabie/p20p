@@ -41,22 +41,44 @@ $profit_stmt->execute([$avg_buy_price, $user_id]);
 $total_profit_yer_all = $profit_stmt->fetchColumn() ?: 0;
 $total_profit_usd_all = ($def_buy > 0) ? ($total_profit_yer_all / $def_buy) : 0;
 
-// ب. حساب حجم التداول اليومي (Volume)
-$daily_buy_vol_stmt = $pdo->prepare("SELECT SUM(crypto_amount) FROM transactions WHERE user_id = ? AND type='buy' AND DATE(created_at) = ?");
-$daily_buy_vol_stmt->execute([$user_id, $today]);
+// جلب النطاق الزمني المختار (الافتراضي هو 'day')
+$range = $_GET['range'] ?? 'day';
+
+// تحديد نطاق التاريخ للاستعلامات
+$date_condition = "DATE(created_at) = ?";
+$date_params = [$today];
+$range_label = "اليوم";
+
+if ($range === 'yesterday') {
+    $yesterday = date('Y-m-d', strtotime('-1 day'));
+    $date_params = [$yesterday];
+    $range_label = "الأمس";
+} else if ($range === 'week') {
+    $date_condition = "DATE(created_at) >= ?";
+    $date_params = [date('Y-m-d', strtotime('-6 days'))];
+    $range_label = "آخر 7 أيام";
+} else if ($range === 'month') {
+    $date_condition = "DATE(created_at) >= ?";
+    $date_params = [date('Y-m-d', strtotime('-29 days'))];
+    $range_label = "آخر 30 يوم";
+}
+
+// ب. حساب حجم التداول للنطاق المختار (Volume)
+$daily_buy_vol_stmt = $pdo->prepare("SELECT SUM(crypto_amount) FROM transactions WHERE user_id = ? AND type = 'buy' AND $date_condition");
+$daily_buy_vol_stmt->execute(array_merge([$user_id], $date_params));
 $daily_buy_vol = $daily_buy_vol_stmt->fetchColumn() ?: 0;
 
-$daily_sell_vol_stmt = $pdo->prepare("SELECT SUM(crypto_amount) FROM transactions WHERE user_id = ? AND type='sell' AND DATE(created_at) = ?");
-$daily_sell_vol_stmt->execute([$user_id, $today]);
+$daily_sell_vol_stmt = $pdo->prepare("SELECT SUM(crypto_amount) FROM transactions WHERE user_id = ? AND type = 'sell' AND $date_condition");
+$daily_sell_vol_stmt->execute(array_merge([$user_id], $date_params));
 $daily_sell_vol = $daily_sell_vol_stmt->fetchColumn() ?: 0;
 
-// ج. حساب مبالغ السيولة النقدية لليوم (YER)
-$daily_in_money_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid) FROM transactions WHERE user_id = ? AND type='buy' AND DATE(created_at) = ?");
-$daily_in_money_stmt->execute([$user_id, $today]);
+// ج. حساب مبالغ السيولة النقدية للنطاق المختار (YER)
+$daily_in_money_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid) FROM transactions WHERE user_id = ? AND type = 'buy' AND $date_condition");
+$daily_in_money_stmt->execute(array_merge([$user_id], $date_params));
 $daily_in_money = $daily_in_money_stmt->fetchColumn() ?: 0;
 
-$daily_out_money_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid) FROM transactions WHERE user_id = ? AND type='sell' AND DATE(created_at) = ?");
-$daily_out_money_stmt->execute([$user_id, $today]);
+$daily_out_money_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid) FROM transactions WHERE user_id = ? AND type = 'sell' AND $date_condition");
+$daily_out_money_stmt->execute(array_merge([$user_id], $date_params));
 $daily_out_money = $daily_out_money_stmt->fetchColumn() ?: 0;
 
 // د. حساب المخزون المتوفر (Stock)
@@ -69,20 +91,18 @@ $total_out->execute([$user_id]);
 $sum_out = $total_out->fetchColumn() ?: 0;
 $remaining_stock = $sum_in - $sum_out;
 
-// هـ. حسابات اليوم (أرباح ورسوم اليوم فقط) بدقة
-$daily_profit_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid - (? * total_crypto_deducted)) FROM transactions WHERE user_id = ? AND type='sell' AND DATE(created_at) = ?");
-$daily_profit_stmt->execute([$avg_buy_price, $user_id, $today]);
+// هـ. حسابات النطاق المختار (أرباح ورسوم) بدقة
+$daily_profit_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid - (? * total_crypto_deducted)) FROM transactions WHERE user_id = ? AND type = 'sell' AND $date_condition");
+$daily_profit_stmt->execute(array_merge([$avg_buy_price, $user_id], $date_params));
 $daily_profit_yer_val = $daily_profit_stmt->fetchColumn() ?: 0;
 $daily_profit_usd_val = ($def_buy > 0) ? ($daily_profit_yer_val / $def_buy) : 0;
 
-$daily_fees_stmt = $pdo->prepare("SELECT SUM(binance_fee) FROM transactions WHERE user_id = ? AND DATE(created_at) = ?");
-$daily_fees_stmt->execute([$user_id, $today]);
+$daily_fees_stmt = $pdo->prepare("SELECT SUM(binance_fee) FROM transactions WHERE user_id = ? AND $date_condition");
+$daily_fees_stmt->execute(array_merge([$user_id], $date_params));
 $daily_fees_usdt_val = $daily_fees_stmt->fetchColumn() ?: 0;
 $daily_fees_yer_val = $daily_fees_usdt_val * $def_buy;
 
-// جلب النطاق الزمني المختار (الافتراضي هو 'day' لعمليات اليوم)
 // و. جلب بيانات الرسم البياني (منفصلة تماماً حسب النوع)
-$range = $_GET['range'] ?? 'day';
 $chart_labels = [];
 $chart_values = [];
 $cumulative_profit = 0;
@@ -103,6 +123,18 @@ if ($range === 'day') {
     $stmt = $pdo->prepare("SELECT created_at, (total_fiat_paid - (? * total_crypto_deducted)) as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' ORDER BY id DESC LIMIT 30");
     $stmt->execute([$avg_buy_price, $user_id]);
     $data_rows = array_reverse($stmt->fetchAll());
+
+    foreach ($data_rows as $data) {
+        $cumulative_profit += (float)$data['op_profit'];
+        $chart_labels[] = date('h:i A', strtotime($data['created_at']));
+        $chart_values[] = round($cumulative_profit, 2);
+    }
+} else if ($range === 'yesterday') {
+    // وضع الأمس: عمليات البيع للأمس مرتبة زمنياً
+    $yesterday = date('Y-m-d', strtotime('-1 day'));
+    $stmt = $pdo->prepare("SELECT created_at, (total_fiat_paid - (? * total_crypto_deducted)) as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) = ? ORDER BY id ASC LIMIT 50");
+    $stmt->execute([$avg_buy_price, $user_id, $yesterday]);
+    $data_rows = $stmt->fetchAll();
 
     foreach ($data_rows as $data) {
         $cumulative_profit += (float)$data['op_profit'];
@@ -244,18 +276,64 @@ $transactions = $stmt->fetchAll();
             </div>
 
             <!-- شبكة البطاقات داخل النافذة -->
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4 mb-8">
-                <div class="glass-card p-4 border-r-4 border-blue-500 bg-slate-900/40"><span class="text-slate-400 text-[9px] font-bold block mb-1 uppercase">صافي الربح ($)</span><h3 class="text-sm font-black text-blue-400 tabular-nums">$<?php echo number_format($total_profit_usd_all, 2); ?></h3></div>
-                <div class="glass-card p-4 border-r-4 border-emerald-500 bg-slate-900/40"><span class="text-slate-400 text-[9px] font-bold block mb-1 uppercase">صافي الربح (YER)</span><h3 class="text-sm font-black text-emerald-400 tabular-nums"><?php echo number_format($total_profit_yer_all, 2); ?></h3></div>
-                <div class="glass-card p-4 border-r-4 border-purple-500 bg-slate-900/40"><span class="text-slate-400 text-[9px] font-bold block mb-1 uppercase italic">متوسط الشراء (WAC)</span><h3 class="text-sm font-black text-purple-400 tabular-nums"><?php echo number_format($avg_buy_price, 2); ?></h3></div>
-                <div class="glass-card p-4 border-l-4 border-blue-500 bg-slate-900/40"><span class="text-[9px] text-blue-400 font-bold block italic uppercase">شراء اليوم (Vol)</span><h3 class="text-sm font-black tabular-nums"><?php echo number_format($daily_buy_vol, 2); ?></h3></div>
-                <div class="glass-card p-4 border-l-4 border-green-500 bg-slate-900/40"><span class="text-[9px] text-green-400 font-bold block italic uppercase">بيع اليوم (Vol)</span><h3 class="text-sm font-black tabular-nums"><?php echo number_format($daily_sell_vol, 2); ?></h3></div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8">
+                <!-- بطاقة الربح العام (ثابتة) -->
+                <div class="glass-card p-4 border-r-4 border-blue-500 bg-slate-900/40">
+                    <span class="text-slate-400 text-[9px] font-bold block mb-1 uppercase">صافي الربح العام</span>
+                    <h3 class="text-sm font-black text-blue-400 tabular-nums">$<?php echo number_format($total_profit_usd_all, 2); ?></h3>
+                    <p class="text-[10px] text-slate-500"><?php echo number_format($total_profit_yer_all); ?> YER</p>
+                </div>
 
-                <div class="glass-card p-4 border-l-4 border-slate-600 bg-slate-900/40"><span class="text-[9px] text-slate-400 font-bold block italic uppercase">وارد اليوم (YER)</span><h3 class="text-sm font-black tabular-nums"><?php echo number_format($daily_in_money, 2); ?></h3></div>
-                <div class="glass-card p-4 border-l-4 border-slate-600 bg-slate-900/40"><span class="text-[9px] text-slate-400 font-bold block italic uppercase">صادر اليوم (YER)</span><h3 class="text-sm font-black tabular-nums"><?php echo number_format($daily_out_money, 2); ?></h3></div>
-                <div class="glass-card p-4 bg-emerald-500/10 border border-emerald-500/20"><span class="text-[9px] text-emerald-500 font-black uppercase mb-1 block">ربح اليوم (YER)</span><h3 class="text-sm font-black text-emerald-400 tabular-nums"><?php echo number_format($daily_profit_yer_val, 2); ?></h3></div>
-                <div class="glass-card p-4 bg-rose-500/10 border border-rose-500/20"><span class="text-[9px] text-rose-500 font-black uppercase mb-1 block">رسوم اليوم (USDT)</span><h3 class="text-sm font-black text-rose-400 tabular-nums"><?php echo number_format($daily_fees_usdt_val, 2); ?></h3></div>
-                <div class="glass-card p-4 bg-purple-500/10 border border-purple-500/20"><span class="text-[9px] text-purple-500 font-black uppercase mb-1 block">رسوم اليوم (YER)</span><h3 class="text-sm font-black text-purple-400 tabular-nums"><?php echo number_format($daily_fees_yer_val, 2); ?></h3></div>
+                <!-- بطاقة متوسط الشراء (ثابتة) -->
+                <div class="glass-card p-4 border-r-4 border-purple-500 bg-slate-900/40">
+                    <span class="text-slate-400 text-[9px] font-bold block mb-1 uppercase italic">متوسط الشراء (WAC)</span>
+                    <h3 class="text-sm font-black text-purple-400 tabular-nums"><?php echo number_format($avg_buy_price, 2); ?></h3>
+                    <p class="text-[10px] text-slate-500 italic">YER لكل 1 USDT</p>
+                </div>
+
+                <!-- بطاقة ربح الفترة (متغيرة) -->
+                <div class="glass-card p-4 border-r-4 border-emerald-500 bg-emerald-500/5">
+                    <span class="text-emerald-500 text-[9px] font-black block mb-1 uppercase">ربح فترة (<?php echo $range_label; ?>)</span>
+                    <h3 class="text-sm font-black text-emerald-400 tabular-nums"><?php echo number_format($daily_profit_yer_val); ?> <span class="text-[9px]">YER</span></h3>
+                    <p class="text-[10px] text-emerald-500/70 font-bold">$<?php echo number_format($daily_profit_usd_val, 2); ?></p>
+                </div>
+
+                <!-- بطاقة رسوم الفترة (متغيرة) -->
+                <div class="glass-card p-4 border-r-4 border-rose-500 bg-rose-500/5">
+                    <span class="text-rose-500 text-[9px] font-black block mb-1 uppercase">رسوم فترة (<?php echo $range_label; ?>)</span>
+                    <h3 class="text-sm font-black text-rose-400 tabular-nums"><?php echo number_format($daily_fees_usdt_val, 2); ?> <span class="text-[9px]">USDT</span></h3>
+                    <p class="text-[10px] text-rose-500/70 font-bold"><?php echo number_format($daily_fees_yer_val); ?> YER</p>
+                </div>
+
+                <!-- بطاقة شراء الفترة (مدمجة) -->
+                <div class="glass-card p-4 border-l-4 border-blue-500 bg-blue-500/5 col-span-2 md:col-span-2">
+                    <span class="text-blue-400 text-[9px] font-black block mb-1 uppercase italic">إجمالي الشراء (<?php echo $range_label; ?>)</span>
+                    <div class="flex justify-between items-end">
+                        <div>
+                            <p class="text-[10px] text-slate-500 mb-0.5">الكمية المستلمة:</p>
+                            <h3 class="text-base font-black text-white tabular-nums"><?php echo number_format($daily_buy_vol, 2); ?> <span class="text-xs opacity-50">USDT</span></h3>
+                        </div>
+                        <div class="text-left">
+                            <p class="text-[10px] text-slate-500 mb-0.5">وارد (المبلغ المدفوع):</p>
+                            <h3 class="text-base font-black text-blue-400 tabular-nums"><?php echo number_format($daily_in_money); ?> <span class="text-xs opacity-50">YER</span></h3>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- بطاقة بيع الفترة (مدمجة) -->
+                <div class="glass-card p-4 border-l-4 border-green-500 bg-green-500/5 col-span-2 md:col-span-2">
+                    <span class="text-green-400 text-[9px] font-black block mb-1 uppercase italic">إجمالي البيع (<?php echo $range_label; ?>)</span>
+                    <div class="flex justify-between items-end">
+                        <div>
+                            <p class="text-[10px] text-slate-500 mb-0.5">الكمية المرسلة:</p>
+                            <h3 class="text-base font-black text-white tabular-nums"><?php echo number_format($daily_sell_vol, 2); ?> <span class="text-xs opacity-50">USDT</span></h3>
+                        </div>
+                        <div class="text-left">
+                            <p class="text-[10px] text-slate-500 mb-0.5">صادر (المبلغ المستلم):</p>
+                            <h3 class="text-base font-black text-green-400 tabular-nums"><?php echo number_format($daily_out_money); ?> <span class="text-xs opacity-50">YER</span></h3>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- قسم الرسم البياني داخل النافذة -->
@@ -268,6 +346,7 @@ $transactions = $stmt->fetchAll();
 
                     <div class="flex bg-slate-900/80 p-1 rounded border border-slate-700">
                         <a href="?range=day#reportsModal" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='day'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">اليوم</a>
+                        <a href="?range=yesterday#reportsModal" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='yesterday'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">الأمس</a>
                         <a href="?range=week#reportsModal" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='week'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">أسبوعي</a>
                         <a href="?range=month#reportsModal" class="px-3 py-1 text-[10px] font-bold rounded <?php echo $range=='month'?'bg-yellow-500 text-black':'text-slate-400 hover:text-white'; ?>">شهري</a>
                     </div>
@@ -278,6 +357,7 @@ $transactions = $stmt->fetchAll();
                         <canvas id="profitChart"></canvas>
                     </div>
                 </div>
+                <p class="text-center text-[10px] text-slate-500 mt-2 italic font-bold">ملاحظة: الرسم البياني يوضح تراكم الأرباح خلال النطاق الزمني المختار</p>
             </div>
 
             <!-- قسم شفافية الأرباح -->
