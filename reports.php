@@ -24,7 +24,7 @@ $default_buy_price = $settings_stmt->fetchColumn() ?: 535;
 // 4. جلب إحصائيات العمر (Lifetime Analytics)
 $lifetime_stmt = $pdo->prepare("
     SELECT
-        SUM(CASE WHEN type='sell' THEN total_fiat_paid - (? * crypto_amount) ELSE 0 END) as total_profit,
+        SUM(CASE WHEN type='sell' THEN total_fiat_paid - (? * total_crypto_deducted) ELSE 0 END) as total_profit,
         SUM(crypto_amount) as total_volume,
         COUNT(*) as total_tx
     FROM transactions
@@ -35,7 +35,7 @@ $lifetime = $lifetime_stmt->fetch();
 
 // 5. إحصائيات مميزة (Best Day & Highest Vol)
 $best_day_stmt = $pdo->prepare("
-    SELECT DATE(created_at) as day, SUM((price_per_unit - ?) * crypto_amount) as daily_profit
+    SELECT DATE(created_at) as day, SUM(total_fiat_paid - (? * total_crypto_deducted)) as daily_profit
     FROM transactions
     WHERE user_id = ? AND type='sell'
     GROUP BY DATE(created_at)
@@ -72,12 +72,15 @@ if ($end_date) {
     $params[] = $end_date;
 }
 
-// 7. استعلام تجميع البيانات اليومي
+array_unshift($params, $avg_buy_price);
+
+// 7. استعلام تجميع البيانات اليومي مع حساب الأرباح بدقة لتجنب N+1
 $sql = "SELECT 
             DATE(created_at) as day, 
             SUM(CASE WHEN type='buy' THEN total_fiat_paid ELSE 0 END) as total_buy_fiat,
             SUM(CASE WHEN type='sell' THEN total_fiat_paid ELSE 0 END) as total_sell_fiat,
             SUM(CASE WHEN type='sell' THEN crypto_amount ELSE 0 END) as total_sell_qty,
+            SUM(CASE WHEN type='sell' THEN total_fiat_paid - (? * total_crypto_deducted) ELSE 0 END) as daily_profit_yer,
             COUNT(*) as transactions_count
         FROM transactions 
         $where_clause
@@ -221,7 +224,7 @@ try {
                             $last_month = $month_display;
                             endif;
 
-                            $daily_profit_yer = $day['total_sell_fiat'] - ($avg_buy_price * $day['total_sell_qty']);
+                            $daily_profit_yer = $day['daily_profit_yer'];
                             $daily_profit_usd = ($default_buy_price > 0) ? ($daily_profit_yer / $default_buy_price) : 0;
                         ?>
                         <tr class="table-row transition-colors">
