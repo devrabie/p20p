@@ -246,17 +246,67 @@ $transactions = $stmt->fetchAll();
         <!-- الشريط الذكي (Smart Banner) -->
         <?php if($remaining_stock > 0):
             $break_even_price = $avg_buy_price * 1.001;
+            $recommended_price = $avg_buy_price * 1.007; // ربح متوسط 0.7%
+            $best_price = $avg_buy_price * 1.012; // ربح ممتاز 1.2%
         ?>
-        <div class="glass-card p-4 mb-6 border-l-4 border-blue-500 bg-blue-500/5 animate-pulse">
-            <div class="flex items-center gap-3">
-                <i data-lucide="info" class="text-blue-500 w-5 h-5"></i>
-                <div>
-                    <p class="text-[10px] text-blue-400 font-bold uppercase tracking-widest">تنبيه ذكي: سعر التعادل (Break-even)</p>
-                    <p class="text-sm font-black text-white italic tabular-nums">
-                        أقل سعر بيع للربح: <span class="text-blue-400"><?php echo number_format($break_even_price, 2); ?> YER</span>
-                        <span class="text-[9px] text-slate-500 font-normal mr-2">(أي سعر أقل من هذا سيعني خسارة محققة بسبب الرسوم ومتوسط الشراء)</span>
-                    </p>
+        <div class="glass-card p-4 mb-6 border-l-4 border-blue-500 bg-blue-500/5">
+            <div class="flex items-start justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
+                        <i data-lucide="zap" class="text-blue-500 w-5 h-5 animate-pulse"></i>
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-blue-400 font-bold uppercase tracking-widest mb-1">مستشار التداول الذكي</p>
+                        <div class="flex flex-wrap gap-x-6 gap-y-2">
+                            <p class="text-xs font-black text-white italic tabular-nums">سعر التعادل: <span class="text-slate-400"><?php echo number_format($break_even_price, 2); ?></span></p>
+                            <p class="text-xs font-black text-emerald-400 italic tabular-nums">سعر التوصية: <span class="text-white"><?php echo number_format($recommended_price, 2); ?></span></p>
+                            <p class="text-xs font-black text-yellow-500 italic tabular-nums">أفضل سعر بيع: <span class="text-white"><?php echo number_format($best_price, 2); ?></span></p>
+                        </div>
+                    </div>
                 </div>
+                <button onclick="openProfitCalculator()" class="bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white p-2 rounded-lg transition-all" title="محاكي الأرباح">
+                    <i data-lucide="help-circle" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- نافذة محاكي الأرباح المنبثقة -->
+        <div id="profitCalcModal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-[600]">
+            <div class="glass-card w-full max-w-md p-8 border-2 border-blue-500/30 shadow-2xl text-right">
+                <div class="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
+                    <h2 class="text-lg font-black text-blue-400 flex items-center gap-3 italic uppercase tracking-widest"><i data-lucide="calculator"></i> محاكي الأرباح المتوقعة</h2>
+                    <button onclick="closeProfitCalculator()" class="bg-slate-800 p-2 rounded-lg text-white hover:bg-rose-500 transition"><i data-lucide="x" class="w-4 h-4"></i></button>
+                </div>
+
+                <p class="text-xs text-slate-500 mb-6 font-bold italic leading-relaxed">
+                    بناءً على مخزونك الحالي (<span class="text-yellow-500"><?php echo number_format($remaining_stock, 2); ?> USDT</span>) ومتوسط شراء (<span class="text-purple-400"><?php echo number_format($avg_buy_price, 2); ?> YER</span>)، إليك الأرباح الصافية المتوقعة عند البيع بأسعار مختلفة:
+                </p>
+
+                <div class="space-y-4">
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                        <p class="text-[10px] text-slate-500 font-bold uppercase mb-1">بالسعر الافتراضي للإعدادات (<?php echo number_format($def_sell, 2); ?>)</p>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm font-black <?php echo ($def_sell > $break_even_price) ? 'text-emerald-500' : 'text-rose-500'; ?> tabular-nums"><?php echo number_format(($remaining_stock * $def_sell) - ($avg_buy_price * ($remaining_stock * 1.001))); ?> YER</span>
+                            <span class="text-[10px] text-slate-500">صافي الربح</span>
+                        </div>
+                    </div>
+                    <div class="bg-emerald-500/5 p-4 rounded-xl border border-emerald-500/20">
+                        <p class="text-[10px] text-emerald-500 font-bold uppercase mb-1 tracking-widest">بسعر التوصية (<?php echo number_format($recommended_price, 2); ?>)</p>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm font-black text-emerald-400 tabular-nums"><?php echo number_format(($remaining_stock * $recommended_price) - ($avg_buy_price * ($remaining_stock * 1.001))); ?> YER</span>
+                            <span class="text-[10px] text-emerald-600 font-bold">ربح متوسط (0.7%)</span>
+                        </div>
+                    </div>
+                    <div class="bg-yellow-500/5 p-4 rounded-xl border border-yellow-500/20">
+                        <p class="text-[10px] text-yellow-500 font-bold uppercase mb-1 tracking-widest">بأفضل سعر بيع (<?php echo number_format($best_price, 2); ?>)</p>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm font-black text-yellow-400 tabular-nums"><?php echo number_format(($remaining_stock * $best_price) - ($avg_buy_price * ($remaining_stock * 1.001))); ?> YER</span>
+                            <span class="text-[10px] text-yellow-600 font-bold">ربح ممتاز (1.2%)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-8 text-center"><button onclick="closeProfitCalculator()" class="w-full bg-slate-800 text-white py-4 rounded-xl font-bold text-xs uppercase italic tracking-widest hover:bg-slate-700 transition">فهمت ذلك</button></div>
             </div>
         </div>
         <?php endif; ?>
@@ -498,6 +548,9 @@ $transactions = $stmt->fetchAll();
         function openReportsModal() { document.getElementById('reportsModal').classList.remove('hidden'); window.location.hash = "reportsModal"; }
         function closeReportsModal() { document.getElementById('reportsModal').classList.add('hidden'); history.pushState("", document.title, window.location.pathname + window.location.search); }
 
+        function openProfitCalculator() { document.getElementById('profitCalcModal').classList.remove('hidden'); }
+        function closeProfitCalculator() { document.getElementById('profitCalcModal').classList.add('hidden'); }
+
         function saveMainFormState() {
             localStorage.setItem('enable_backdate', document.getElementById('enable_backdate').checked);
             localStorage.setItem('manual_date', document.getElementById('manual_date').value);
@@ -661,7 +714,11 @@ $transactions = $stmt->fetchAll();
             document.getElementById('edit_amount').value = data.crypto_amount;
             document.getElementById('edit_price').value = data.price_per_unit;
             document.getElementById('edit_binance_fee').value = data.binance_fee;
-            document.getElementById('edit_manual_fee').value = data.manual_fee || 0;
+
+            const editManualFee = document.getElementById('edit_manual_fee');
+            editManualFee.value = data.manual_fee || 0;
+            editManualFee.dataset.manualModified = "false";
+
             document.getElementById('editManualFeeContainer').style.display = data.type === 'sell' ? 'none' : 'block';
 
             // Formatting for datetime-local input (YYYY-MM-DDTHH:MM)
@@ -687,12 +744,15 @@ $transactions = $stmt->fetchAll();
 
                     binanceFeeInput.value = (gross - amount).toFixed(2);
 
-                    // أتمتة رسوم الصراف أيضاً عند التعديل
-                    let autoFee = 0;
-                    if (grossYER > 300000) autoFee = 200;
-                    else if (grossYER > 90000) autoFee = 50;
-
-                    manualFeeInput.value = autoFee;
+                    // أتمتة رسوم الصراف أيضاً عند التعديل - مع مراعاة التعديل اليدوي
+                    let finalFee = 0;
+                    if (manualFeeInput.dataset.manualModified === "true") {
+                        finalFee = parseFloat(manualFeeInput.value) || 0;
+                    } else {
+                        if (grossYER > 300000) finalFee = 200;
+                        else if (grossYER > 90000) finalFee = 50;
+                        manualFeeInput.value = finalFee;
+                    }
                 } else {
                     binanceFeeInput.value = (amount * 0.001).toFixed(2);
                     manualFeeInput.value = 0;
@@ -701,11 +761,16 @@ $transactions = $stmt->fetchAll();
         }
 
         document.getElementById('edit_type').addEventListener('change', function() {
+            document.getElementById('edit_manual_fee').dataset.manualModified = "false";
             document.getElementById('editManualFeeContainer').style.display = this.value === 'sell' ? 'none' : 'block';
             updateEditCalculations();
         });
         document.getElementById('edit_price').addEventListener('input', updateEditCalculations);
         document.getElementById('edit_amount').addEventListener('input', updateEditCalculations);
+        document.getElementById('edit_manual_fee').addEventListener('input', function() {
+            this.dataset.manualModified = "true";
+            updateEditCalculations();
+        });
 
         // --- نظام السجل المتطور ---
         const rawTransactions = <?php echo json_encode($transactions); ?>;
