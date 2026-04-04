@@ -342,7 +342,7 @@ $transactions = $stmt->fetchAll();
     <div id="editModal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-[999]">
         <div class="glass-card w-full max-w-md p-8 border-2 border-blue-500/30 shadow-2xl text-right">
             <h2 class="text-xl font-black mb-8 text-blue-400 flex items-center gap-3 italic uppercase underline tracking-widest"><i data-lucide="edit"></i> تعديل بيانات</h2>
-            <form action="update.php" method="POST" class="space-y-6">
+            <form id="edit-ajax-form" class="space-y-6">
                 <input type="hidden" name="id" id="edit_id">
                 <div><label class="block text-xs text-slate-400 mb-2 font-black italic tracking-widest uppercase">تعديل التاريخ</label><input type="datetime-local" name="transaction_date" id="edit_date" required class="input-dark font-black text-yellow-500 border-yellow-500/20 tabular-nums text-center"></div>
 
@@ -364,7 +364,7 @@ $transactions = $stmt->fetchAll();
                     <div id="editManualFeeContainer"><label class="block text-xs text-blue-400 mb-2 font-black uppercase italic text-center">رسوم صراف (YER)</label><input type="number" step="any" name="manual_fee" id="edit_manual_fee" class="input-dark text-blue-400 font-black tabular-nums text-center"></div>
                 </div>
 
-                <div class="flex gap-4 pt-4"><button type="submit" class="flex-1 btn-primary-glass py-4 font-black text-white uppercase italic">تحديث</button><button type="button" onclick="document.getElementById('editModal').classList.add('hidden')" class="flex-1 bg-slate-800 py-4 text-xs font-black text-white uppercase italic">تراجع</button></div>
+                <div class="flex gap-4 pt-4"><button type="submit" id="edit-submit-btn" class="flex-1 btn-primary-glass py-4 font-black text-white uppercase italic">تحديث</button><button type="button" onclick="document.getElementById('editModal').classList.add('hidden')" class="flex-1 bg-slate-800 py-4 text-xs font-black text-white uppercase italic">تراجع</button></div>
             </form>
         </div>
     </div>
@@ -382,9 +382,39 @@ $transactions = $stmt->fetchAll();
         function openReportsModal() { document.getElementById('reportsModal').classList.remove('hidden'); window.location.hash = "reportsModal"; }
         function closeReportsModal() { document.getElementById('reportsModal').classList.add('hidden'); history.pushState("", document.title, window.location.pathname + window.location.search); }
 
+        function saveMainFormState() {
+            localStorage.setItem('enable_backdate', document.getElementById('enable_backdate').checked);
+            localStorage.setItem('manual_date', document.getElementById('manual_date').value);
+            localStorage.setItem('type', typeSelect.value);
+            localStorage.setItem('price', priceInput.value);
+            localStorage.setItem('manual_fee', manualFiatInput.value);
+        }
+
+        function loadMainFormState() {
+            const backdate = localStorage.getItem('enable_backdate') === 'true';
+            const manualDate = localStorage.getItem('manual_date');
+            const type = localStorage.getItem('type');
+            const price = localStorage.getItem('price');
+            const manualFee = localStorage.getItem('manual_fee');
+
+            if (backdate) {
+                document.getElementById('enable_backdate').checked = true;
+                toggleDateInput();
+            }
+            if (manualDate) document.getElementById('manual_date').value = manualDate;
+            if (type) {
+                typeSelect.value = type;
+                handleTypeChange();
+            }
+            if (price) priceInput.value = price;
+            if (manualFee) manualFiatInput.value = manualFee;
+            updateCalculations();
+        }
+
         window.onload = function() {
             renderProfitChart();
             renderTransactions();
+            loadMainFormState();
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('status') === 'success') { showToast("تم الحفظ بنجاح وتحديث ميزان الأرباح!"); window.history.replaceState({}, document.title, "index.php#form-section"); }
             if (urlParams.get('updated') === '1') { showToast("تم تحديث العملية بنجاح!"); window.history.replaceState({}, document.title, "index.php#form-section"); }
@@ -400,6 +430,15 @@ $transactions = $stmt->fetchAll();
             fetch('process.php', { method: 'POST', body: new FormData(this) })
             .then(res => res.json())
             .then(data => { if (data.status === 'success') { window.location.href="index.php?status=success#form-section"; window.location.reload(); } else { alert(data.message); btn.disabled = false; btn.innerText = "حفظ"; } });
+        });
+
+        const editAjaxForm = document.getElementById('edit-ajax-form');
+        editAjaxForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            saveEditModalState();
+            const btn = document.getElementById('edit-submit-btn'); btn.disabled = true; btn.innerHTML = '<i data-lucide="loader" class="animate-spin w-4 h-4"></i>'; lucide.createIcons();
+            fetch('update.php', { method: 'POST', body: new FormData(this) })
+            .then(res => { if (res.ok) { window.location.href="index.php?updated=1"; window.location.reload(); } else { alert("خطأ في التحديث"); btn.disabled = false; btn.innerText = "تحديث"; } });
         });
 
         const amountInput = document.getElementById('crypto_amount_input');
@@ -432,9 +471,11 @@ $transactions = $stmt->fetchAll();
         }
 
         amountInput.addEventListener('input', updateCalculations);
-        priceInput.addEventListener('input', updateCalculations);
-        manualFiatInput.addEventListener('input', updateCalculations);
-        typeSelect.addEventListener('change', () => { handleTypeChange(); updateCalculations(); });
+        priceInput.addEventListener('input', () => { updateCalculations(); saveMainFormState(); });
+        manualFiatInput.addEventListener('input', () => { updateCalculations(); saveMainFormState(); });
+        typeSelect.addEventListener('change', () => { handleTypeChange(); updateCalculations(); saveMainFormState(); });
+        document.getElementById('enable_backdate').addEventListener('change', saveMainFormState);
+        document.getElementById('manual_date').addEventListener('input', saveMainFormState);
 
         function handleTypeChange() {
             typeSelect.value === 'sell' ? priceInput.value = SELL_PRICE_DEF : priceInput.value = BUY_PRICE_DEF;
@@ -447,17 +488,37 @@ $transactions = $stmt->fetchAll();
             document.getElementById('live_clock_display').style.display = isChecked ? 'none' : 'block';
         }
 
+        function saveEditModalState() {
+            localStorage.setItem('edit_date', document.getElementById('edit_date').value);
+            localStorage.setItem('edit_type', document.getElementById('edit_type').value);
+            localStorage.setItem('edit_price', document.getElementById('edit_price').value);
+            localStorage.setItem('edit_manual_fee', document.getElementById('edit_manual_fee').value);
+        }
+
         function openEditModal(data) {
             document.getElementById('edit_id').value = data.id;
-            document.getElementById('edit_type').value = data.type;
+
+            const savedDate = localStorage.getItem('edit_date');
+            const savedType = localStorage.getItem('edit_type');
+            const savedPrice = localStorage.getItem('edit_price');
+            const savedManualFee = localStorage.getItem('edit_manual_fee');
+
+            document.getElementById('edit_type').value = savedType || data.type;
             document.getElementById('edit_amount').value = data.crypto_amount;
-            document.getElementById('edit_price').value = data.price_per_unit;
+            document.getElementById('edit_price').value = savedPrice || data.price_per_unit;
             document.getElementById('edit_binance_fee').value = data.binance_fee;
-            document.getElementById('edit_manual_fee').value = data.manual_fee || 0;
-            document.getElementById('editManualFeeContainer').style.display = data.type === 'sell' ? 'none' : 'block';
-            let date = new Date(data.created_at);
-            document.getElementById('edit_date').value = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+            document.getElementById('edit_manual_fee').value = savedManualFee || data.manual_fee || 0;
+            document.getElementById('editManualFeeContainer').style.display = document.getElementById('edit_type').value === 'sell' ? 'none' : 'block';
+
+            if (savedDate) {
+                document.getElementById('edit_date').value = savedDate;
+            } else {
+                let date = new Date(data.created_at);
+                document.getElementById('edit_date').value = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+            }
+
             document.getElementById('editModal').classList.remove('hidden');
+            updateEditCalculations();
         }
 
         function updateEditCalculations() {
@@ -478,7 +539,11 @@ $transactions = $stmt->fetchAll();
         document.getElementById('edit_type').addEventListener('change', function() {
             document.getElementById('editManualFeeContainer').style.display = this.value === 'sell' ? 'none' : 'block';
             updateEditCalculations();
+            saveEditModalState();
         });
+        document.getElementById('edit_date').addEventListener('input', saveEditModalState);
+        document.getElementById('edit_price').addEventListener('input', saveEditModalState);
+        document.getElementById('edit_manual_fee').addEventListener('input', saveEditModalState);
         document.getElementById('edit_amount').addEventListener('input', updateEditCalculations);
 
         // --- نظام السجل المتطور ---
