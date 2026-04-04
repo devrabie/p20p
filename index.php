@@ -387,7 +387,6 @@ $transactions = $stmt->fetchAll();
             localStorage.setItem('manual_date', document.getElementById('manual_date').value);
             localStorage.setItem('type', typeSelect.value);
             localStorage.setItem('price', priceInput.value);
-            localStorage.setItem('manual_fee', manualFiatInput.value);
         }
 
         function loadMainFormState() {
@@ -395,7 +394,6 @@ $transactions = $stmt->fetchAll();
             const manualDate = localStorage.getItem('manual_date');
             const type = localStorage.getItem('type');
             const price = localStorage.getItem('price');
-            const manualFee = localStorage.getItem('manual_fee');
 
             if (backdate) {
                 document.getElementById('enable_backdate').checked = true;
@@ -407,7 +405,6 @@ $transactions = $stmt->fetchAll();
                 handleTypeChange();
             }
             if (price) priceInput.value = price;
-            if (manualFee) manualFiatInput.value = manualFee;
             updateCalculations();
         }
 
@@ -452,7 +449,7 @@ $transactions = $stmt->fetchAll();
             const amount = parseFloat(amountInput.value) || 0;
             const price = parseFloat(priceInput.value) || 0;
             const type = typeSelect.value;
-            const manualFiat = parseFloat(manualFiatInput.value) || 0;
+
             if (amount > 0) {
                 calcPreview.classList.remove('hidden');
                 if (type === 'buy') {
@@ -460,14 +457,27 @@ $transactions = $stmt->fetchAll();
                     const fee = gross - amount;
                     feeInput.value = fee.toFixed(2);
                     document.getElementById('prev-gross').textContent = gross.toFixed(4);
-                    document.getElementById('prev-total-yer').textContent = ((gross * price) + manualFiat).toLocaleString();
+
+                    const grossYER = gross * price;
+                    // أتمتة رسوم الصراف بناءً على إجمالي المبلغ
+                    let autoFee = 0;
+                    if (grossYER > 300000) autoFee = 200;
+                    else if (grossYER > 90000) autoFee = 50;
+
+                    manualFiatInput.value = autoFee;
+                    document.getElementById('prev-total-yer').textContent = (grossYER + autoFee).toLocaleString();
                 } else {
                     const fee = amount * 0.001;
                     feeInput.value = fee.toFixed(2);
                     document.getElementById('prev-gross').textContent = (amount + fee).toFixed(4);
                     document.getElementById('prev-total-yer').textContent = (amount * price).toLocaleString();
+                    manualFiatInput.value = 0;
                 }
-            } else { calcPreview.classList.add('hidden'); feeInput.value = "0.00"; }
+            } else {
+                calcPreview.classList.add('hidden');
+                feeInput.value = "0.00";
+                manualFiatInput.value = 0;
+            }
         }
 
         amountInput.addEventListener('input', updateCalculations);
@@ -488,36 +498,20 @@ $transactions = $stmt->fetchAll();
             document.getElementById('live_clock_display').style.display = isChecked ? 'none' : 'block';
         }
 
-        function saveEditModalState() {
-            localStorage.setItem('edit_date', document.getElementById('edit_date').value);
-            localStorage.setItem('edit_type', document.getElementById('edit_type').value);
-            localStorage.setItem('edit_price', document.getElementById('edit_price').value);
-            localStorage.setItem('edit_manual_fee', document.getElementById('edit_manual_fee').value);
-        }
-
         function openEditModal(data) {
             document.getElementById('edit_id').value = data.id;
 
-            const savedDate = localStorage.getItem('edit_date');
-            const savedType = localStorage.getItem('edit_type');
-            const savedPrice = localStorage.getItem('edit_price');
-            const savedManualFee = localStorage.getItem('edit_manual_fee');
-
-            document.getElementById('edit_type').value = savedType || data.type;
+            document.getElementById('edit_type').value = data.type;
             document.getElementById('edit_amount').value = data.crypto_amount;
-            document.getElementById('edit_price').value = savedPrice || data.price_per_unit;
+            document.getElementById('edit_price').value = data.price_per_unit;
             document.getElementById('edit_binance_fee').value = data.binance_fee;
-            document.getElementById('edit_manual_fee').value = savedManualFee || data.manual_fee || 0;
-            document.getElementById('editManualFeeContainer').style.display = document.getElementById('edit_type').value === 'sell' ? 'none' : 'block';
+            document.getElementById('edit_manual_fee').value = data.manual_fee || 0;
+            document.getElementById('editManualFeeContainer').style.display = data.type === 'sell' ? 'none' : 'block';
 
-            if (savedDate) {
-                document.getElementById('edit_date').value = savedDate;
-            } else {
-                // Formatting for datetime-local input (YYYY-MM-DDTHH:MM)
-                // Created_at is "YYYY-MM-DD HH:MM:SS" in Yemen time
-                let dt = data.created_at.replace(" ", "T").substring(0, 16);
-                document.getElementById('edit_date').value = dt;
-            }
+            // Formatting for datetime-local input (YYYY-MM-DDTHH:MM)
+            // Created_at is "YYYY-MM-DD HH:MM:SS" in Yemen time
+            let dt = data.created_at.replace(" ", "T").substring(0, 16);
+            document.getElementById('edit_date').value = dt;
 
             document.getElementById('editModal').classList.remove('hidden');
             updateEditCalculations();
@@ -525,15 +519,27 @@ $transactions = $stmt->fetchAll();
 
         function updateEditCalculations() {
             const amount = parseFloat(document.getElementById('edit_amount').value) || 0;
+            const price = parseFloat(document.getElementById('edit_price').value) || 0;
             const type = document.getElementById('edit_type').value;
-            const feeInput = document.getElementById('edit_binance_fee');
+            const binanceFeeInput = document.getElementById('edit_binance_fee');
+            const manualFeeInput = document.getElementById('edit_manual_fee');
 
             if (amount > 0) {
                 if (type === 'buy') {
                     const gross = amount / 0.999;
-                    feeInput.value = (gross - amount).toFixed(2);
+                    const grossYER = gross * price;
+
+                    binanceFeeInput.value = (gross - amount).toFixed(2);
+
+                    // أتمتة رسوم الصراف أيضاً عند التعديل
+                    let autoFee = 0;
+                    if (grossYER > 300000) autoFee = 200;
+                    else if (grossYER > 90000) autoFee = 50;
+
+                    manualFeeInput.value = autoFee;
                 } else {
-                    feeInput.value = (amount * 0.001).toFixed(2);
+                    binanceFeeInput.value = (amount * 0.001).toFixed(2);
+                    manualFeeInput.value = 0;
                 }
             }
         }
@@ -541,11 +547,8 @@ $transactions = $stmt->fetchAll();
         document.getElementById('edit_type').addEventListener('change', function() {
             document.getElementById('editManualFeeContainer').style.display = this.value === 'sell' ? 'none' : 'block';
             updateEditCalculations();
-            saveEditModalState();
         });
-        document.getElementById('edit_date').addEventListener('input', saveEditModalState);
-        document.getElementById('edit_price').addEventListener('input', saveEditModalState);
-        document.getElementById('edit_manual_fee').addEventListener('input', saveEditModalState);
+        document.getElementById('edit_price').addEventListener('input', updateEditCalculations);
         document.getElementById('edit_amount').addEventListener('input', updateEditCalculations);
 
         // --- نظام السجل المتطور ---
