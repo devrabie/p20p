@@ -54,5 +54,64 @@ class BinanceP2P {
 
         return $data['data'] ?? [];
     }
+
+    public function getPayTransactions($rows = 10, $startTimestamp = null) {
+        $endpoint = "/sapi/v1/pay/transactions";
+        $timestamp = number_format(microtime(true) * 1000, 0, '.', '');
+
+        $params = [
+            'timestamp' => $timestamp,
+            'recvWindow' => 5000
+        ];
+
+        if ($startTimestamp) {
+            $params['startTime'] = $startTimestamp;
+        }
+
+        $queryString = http_build_query($params);
+        $signature = $this->generateSignature($queryString);
+        $url = $this->baseUrl . $endpoint . '?' . $queryString . '&signature=' . $signature;
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['X-MBX-APIKEY: ' . $this->apiKey]);
+
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        $data = json_decode($response, true);
+        return $data['data'] ?? [];
+    }
+
+    public function getWithdrawHistory($rows = 10, $startTimestamp = null) {
+        $endpoint = "/sapi/v1/capital/withdraw/history";
+        $timestamp = number_format(microtime(true) * 1000, 0, '.', '');
+
+        $params = [
+            'timestamp' => $timestamp,
+            'recvWindow' => 5000,
+            'coin' => 'USDT'
+        ];
+
+        if ($startTimestamp) {
+            $params['startTime'] = $startTimestamp;
+        }
+
+        $queryString = http_build_query($params);
+        $signature = $this->generateSignature($queryString);
+        $url = $this->baseUrl . $endpoint . '?' . $queryString . '&signature=' . $signature;
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['X-MBX-APIKEY: ' . $this->apiKey]);
+
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        $data = json_decode($response, true);
+        return $data ?? [];
+    }
 }
 ?>

@@ -646,12 +646,9 @@ $transactions = $stmt->fetchAll();
             container.innerHTML = '';
 
             if (orders.length === 0) {
-                container.innerHTML = '<div class="text-center py-10 text-slate-500 font-bold italic">لا توجد عمليات P2P حديثة لهذا التاريخ</div>';
+                container.innerHTML = '<div class="text-center py-10 text-slate-500 font-bold italic">لا توجد عمليات حديثة لهذا التاريخ</div>';
                 return;
             }
-
-            // ترتيب احدث المعاملات بالاعلى
-            orders.sort((a, b) => new Date(b.createTime) - new Date(a.createTime));
 
             orders.forEach(order => {
                 const isBuy = order.side === 'BUY';
@@ -659,9 +656,12 @@ $transactions = $stmt->fetchAll();
                 const typeBg = isBuy ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400';
                 const borderClass = isBuy ? 'border-r-emerald-500' : 'border-r-rose-500';
                 const amount = parseFloat(order.amount).toFixed(2);
-                const price = parseFloat(order.unitPrice).toFixed(2);
-                const total = parseFloat(order.totalPrice).toLocaleString();
+                const isP2P = order.source === 'P2P';
                 const isImported = order.is_imported === true;
+
+                let sourceBadge = '';
+                if(order.source === 'PAY') sourceBadge = '<span class="bg-blue-500/20 text-blue-400 px-1.5 rounded text-[8px] font-bold">Pay</span>';
+                if(order.source === 'WITHDRAW') sourceBadge = '<span class="bg-purple-500/20 text-purple-400 px-1.5 rounded text-[8px] font-bold">Withdraw</span>';
 
                 const card = `
                     <div class="glass-card p-4 hover:bg-slate-800/60 transition-all border-r-4 ${borderClass} group ${isImported ? 'opacity-50' : ''}">
@@ -669,7 +669,8 @@ $transactions = $stmt->fetchAll();
                             <div class="flex flex-col gap-2">
                                 <div class="flex items-center gap-2">
                                     <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase ${typeBg}">${typeLabel}</span>
-                                    <span class="text-[10px] font-mono text-slate-600 bg-slate-900/50 px-2 rounded tracking-tighter">#${order.orderNumber}</span>
+                                    ${sourceBadge}
+                                    <span class="text-[10px] font-mono text-slate-600 bg-slate-900/50 px-2 rounded tracking-tighter">#${order.orderNumber.toString().substring(0,10)}...</span>
                                 </div>
                                 <div class="text-right">
                                     <p class="text-lg font-black tabular-nums text-white">${amount} <span class="text-xs opacity-50">USDT</span></p>
@@ -677,11 +678,18 @@ $transactions = $stmt->fetchAll();
                                 </div>
                             </div>
                             <div class="text-left flex flex-col items-end gap-1">
-                                <p class="text-base font-black text-yellow-500 tabular-nums">${total} <span class="text-[10px] text-slate-500">${order.fiat}</span></p>
-                                <p class="text-[10px] font-bold text-slate-400 italic">سعر الصرف: ${price} <span class="text-[8px]">${order.fiat}</span></p>
+                                ${isP2P ? `
+                                    <p class="text-base font-black text-yellow-500 tabular-nums">${parseFloat(order.totalPrice).toLocaleString()} <span class="text-[10px] text-slate-500">${order.fiat}</span></p>
+                                    <p class="text-[10px] font-bold text-slate-400 italic">سعر الصرف: ${parseFloat(order.unitPrice).toFixed(2)}</p>
+                                ` : `
+                                    <p class="text-[10px] text-slate-500 italic mb-2">عملية خارج P2P</p>
+                                `}
+
                                 ${isImported ?
                                     '<span class="mt-2 text-[10px] font-black text-emerald-500 flex items-center gap-1"><i data-lucide="check-circle" class="w-3 h-3"></i> مضافة مسبقاً</span>' :
-                                    `<button id="btn-import-${order.orderNumber}" onclick='quickImportOrder(${JSON.stringify(order)})' class="mt-2 bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black px-4 py-2 rounded text-[10px] font-black transition-all border border-yellow-500/20">إضافة سريعة</button>`
+                                    isP2P ?
+                                        `<button id="btn-import-${order.orderNumber}" onclick='quickImportOrder(${JSON.stringify(order)})' class="mt-2 bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black px-4 py-2 rounded text-[10px] font-black transition-all border border-yellow-500/20">إضافة سريعة</button>` :
+                                        `<button onclick='manualImportToForm(${JSON.stringify(order)})' class="mt-2 bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white px-4 py-2 rounded text-[10px] font-black transition-all border border-blue-500/20">إدراج للنموذج</button>`
                                 }
                             </div>
                         </div>
@@ -690,6 +698,28 @@ $transactions = $stmt->fetchAll();
                 container.innerHTML += card;
             });
             lucide.createIcons();
+        }
+
+        function manualImportToForm(order) {
+            document.getElementById('enable_backdate').checked = true;
+            toggleDateInput();
+
+            // ضبط التاريخ
+            const dt = order.createTime.replace(" ", "T").substring(0, 16);
+            document.getElementById('manual_date').value = dt;
+
+            document.getElementById('typeSelect').value = order.side === 'BUY' ? 'buy' : 'sell';
+            document.getElementById('crypto_amount_input').value = order.amount;
+
+            // لعمليات Pay و Withdraw، السعر غالباً غير معروف، نترك للمستخدم إدخاله
+            document.getElementById('priceInput').value = order.side === 'BUY' ? BUY_PRICE_DEF : SELL_PRICE_DEF;
+
+            handleTypeChange();
+            updateCalculations();
+            closeBinanceModal();
+
+            document.getElementById('form-section').scrollIntoView({ behavior: 'smooth' });
+            showToast("تم إدراج البيانات، يرجى إكمال السعر ثم الحفظ");
         }
 
         function quickImportOrder(order) {

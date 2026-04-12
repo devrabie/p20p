@@ -39,7 +39,10 @@ try {
         $startTimestamp = strtotime($_GET['start_date'] . ' 00:00:00') * 1000;
     }
 
-    $orders = $binance->getP2POrders($settings['binance_fetch_limit'] ?: 10, $startTimestamp);
+    $fetch_limit = $settings['binance_fetch_limit'] ?: 10;
+    $orders = $binance->getP2POrders($fetch_limit, $startTimestamp);
+    $pay_txs = $binance->getPayTransactions($fetch_limit, $startTimestamp);
+    $withdrawals = $binance->getWithdrawHistory($fetch_limit, $startTimestamp);
 
     // جلب أرقام العمليات المضافة مسبقاً
     $imported_stmt = $pdo->prepare("SELECT binance_order_id FROM transactions WHERE user_id = ? AND binance_order_id IS NOT NULL");
@@ -47,9 +50,11 @@ try {
     $imported_ids = $imported_stmt->fetchAll(PDO::FETCH_COLUMN);
 
     $formattedOrders = [];
+
+    // 1. معالجة عمليات P2P
     foreach ($orders as $order) {
-        // تحويل الحالة والبيانات للشكل المطلوب في الواجهة
         $formattedOrders[] = [
+            'source' => 'P2P',
             'orderNumber' => $order['orderNumber'],
             'side' => $order['tradeType'], // BUY or SELL
             'amount' => $order['amount'],
@@ -62,6 +67,49 @@ try {
             'is_imported' => in_array($order['orderNumber'], $imported_ids)
         ];
     }
+
+    // 2. معالجة عمليات Binance Pay (USDT فقط)
+    foreach ($pay_txs as $tx) {
+        if ($tx['currency'] === 'USDT') {
+            $formattedOrders[] = [
+                'source' => 'PAY',
+                'orderNumber' => $tx['orderId'],
+                'side' => ($tx['type'] === 'RECEIVE') ? 'BUY' : 'SELL',
+                'amount' => $tx['amount'],
+                'unitPrice' => 0, // Pay doesn't have exchange rate
+                'totalPrice' => 0,
+                'fiat' => 'USDT',
+                'createTime' => date('Y-m-d H:i:s', $tx['transactionTime'] / 1000),
+                'asset' => 'USDT',
+                'status' => 'COMPLETED',
+                'is_imported' => in_array($tx['orderId'], $imported_ids)
+            ];
+        }
+    }
+
+    // 3. معالجة عمليات السحب (Withdrawals)
+    foreach ($withdrawals as $wd) {
+        if ($wd['coin'] === 'USDT') {
+            $formattedOrders[] = [
+                'source' => 'WITHDRAW',
+                'orderNumber' => $wd['id'],
+                'side' => 'SELL', // Withdrawal is always an outgoing operation
+                'amount' => $wd['amount'],
+                'unitPrice' => 0,
+                'totalPrice' => 0,
+                'fiat' => 'USDT',
+                'createTime' => date('Y-m-d H:i:s', strtotime($wd['applyTime'])),
+                'asset' => 'USDT',
+                'status' => ($wd['status'] == 6) ? 'COMPLETED' : 'PENDING',
+                'is_imported' => in_array($wd['id'], $imported_ids)
+            ];
+        }
+    }
+
+    // ترتيب الكل: الأحدث أولاً
+    usort($formattedOrders, function($a, $b) {
+        return strtotime($b['createTime']) - strtotime($a['createTime']);
+    });
 
     echo json_encode(['status' => 'success', 'orders' => $formattedOrders]);
 
