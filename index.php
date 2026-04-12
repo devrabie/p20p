@@ -23,11 +23,14 @@ $username = $_SESSION['username'] ?? 'مستخدم';
 // --- البدء بجلب البيانات الخاصة بالمستخدم الحالي فقط ---
 
 // جلب إعدادات الأسعار الافتراضية
-$settings_stmt = $pdo->prepare("SELECT default_buy_price, default_sell_price FROM settings WHERE user_id = ?");
+$settings_stmt = $pdo->prepare("SELECT default_buy_price, default_sell_price, binance_api_key, binance_api_secret, binance_fetch_limit FROM settings WHERE user_id = ?");
 $settings_stmt->execute([$user_id]);
 $settings = $settings_stmt->fetch();
 $def_buy = $settings['default_buy_price'] ?? 535;
 $def_sell = $settings['default_sell_price'] ?? 540;
+$api_key = $settings['binance_api_key'] ?? '';
+$api_secret = $settings['binance_api_secret'] ?? '';
+$fetch_limit = $settings['binance_fetch_limit'] ?? 10;
 
 // حساب متوسط الشراء (WAC) بدقة Float - أساس حساب الربح الحقيقي
 $buy_stats_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid) as total_spent, SUM(crypto_amount) as total_bought FROM transactions WHERE user_id = ? AND type='buy'");
@@ -234,6 +237,11 @@ $transactions = $stmt->fetchAll();
             </div>
 
             <div class="flex flex-wrap justify-center md:justify-end items-center gap-2 md:gap-3">
+                <?php if ($api_key && $api_secret): ?>
+                <button onclick="openBinanceModal()" class="glass-card bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all border border-yellow-500/20 active:scale-95">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> جلب من بينانس
+                </button>
+                <?php endif; ?>
                 <a href="reports.php" class="glass-card bg-white/5 hover:bg-white/10 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all border border-white/10 active:scale-95">
                     <i data-lucide="calendar-days" class="w-3.5 h-3.5 text-blue-400"></i> الأرشيف والتحليل
                 </a>
@@ -502,11 +510,32 @@ $transactions = $stmt->fetchAll();
 
     <!-- نافذة الإعدادات -->
     <div id="settingsModal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-[999]">
-        <div class="glass-card w-full max-w-sm p-8 border-2 border-yellow-500/30 shadow-2xl text-center text-right">
+        <div class="glass-card w-full max-w-md p-8 border-2 border-yellow-500/30 shadow-2xl text-right overflow-y-auto max-h-[90vh]">
             <h2 class="text-xl font-black mb-8 text-yellow-500 flex items-center justify-center gap-3 italic uppercase tracking-widest underline decoration-yellow-500/20"><i data-lucide="cog"></i> الإعدادات</h2>
             <form action="update_settings.php" method="POST" class="space-y-6">
-                <div><label class="block text-xs text-blue-400 mb-2 font-black uppercase italic tracking-widest">سعر الشراء الافتراضي</label><input type="number" step="any" name="default_buy_price" value="<?php echo $def_buy; ?>" class="input-dark text-2xl font-black text-center tabular-nums"></div>
-                <div><label class="block text-xs text-green-400 mb-2 font-black uppercase italic tracking-widest">سعر البيع الافتراضي</label><input type="number" step="any" name="default_sell_price" value="<?php echo $def_sell; ?>" class="input-dark text-2xl font-black text-center tabular-nums"></div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div><label class="block text-[10px] text-blue-400 mb-2 font-black uppercase italic tracking-widest text-center">سعر الشراء الافتراضي</label><input type="number" step="any" name="default_buy_price" value="<?php echo $def_buy; ?>" class="input-dark text-lg font-black text-center tabular-nums"></div>
+                    <div><label class="block text-[10px] text-green-400 mb-2 font-black uppercase italic tracking-widest text-center">سعر البيع الافتراضي</label><input type="number" step="any" name="default_sell_price" value="<?php echo $def_sell; ?>" class="input-dark text-lg font-black text-center tabular-nums"></div>
+                </div>
+
+                <div class="pt-4 border-t border-slate-800">
+                    <h3 class="text-xs font-black text-yellow-500 mb-4 uppercase italic">إعدادات Binance API</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-2 font-black uppercase italic">API Key</label>
+                            <input type="text" name="binance_api_key" value="<?php echo htmlspecialchars($api_key); ?>" class="input-dark text-xs tabular-nums" placeholder="أدخل API Key">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-2 font-black uppercase italic">API Secret</label>
+                            <input type="password" name="binance_api_secret" value="<?php echo $api_secret ? '********' : ''; ?>" class="input-dark text-xs tabular-nums" placeholder="أدخل API Secret">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-2 font-black uppercase italic">عدد العمليات للجلب</label>
+                            <input type="number" name="binance_fetch_limit" value="<?php echo $fetch_limit; ?>" class="input-dark text-sm text-center tabular-nums">
+                        </div>
+                    </div>
+                </div>
+
                 <div class="flex gap-4 pt-4"><button type="submit" class="flex-1 btn-primary-glass py-4 font-black uppercase italic">حفظ</button><button type="button" onclick="document.getElementById('settingsModal').classList.add('hidden')" class="flex-1 bg-slate-800 py-4 text-xs font-black text-white uppercase italic">إغلاق</button></div>
             </form>
         </div>
@@ -543,6 +572,23 @@ $transactions = $stmt->fetchAll();
         </div>
     </div>
 
+    <!-- نافذة جلب عمليات بينانس -->
+    <div id="binanceModal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-[999]">
+        <div class="glass-card w-full max-w-2xl p-6 border-2 border-yellow-500/30 shadow-2xl text-right flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
+                <h2 class="text-lg font-black text-yellow-500 flex items-center gap-3 italic uppercase tracking-widest"><i data-lucide="refresh-cw"></i> عمليات P2P الأخيرة</h2>
+                <button onclick="closeBinanceModal()" class="bg-slate-800 p-2 rounded-lg text-white hover:bg-rose-500 transition"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+
+            <div id="binance-orders-container" class="overflow-y-auto flex-grow custom-scrollbar space-y-3 mb-6">
+                <!-- العمليات ستظهر هنا -->
+                <div class="text-center py-10 text-slate-500 font-bold italic">جاري تحميل العمليات...</div>
+            </div>
+
+            <div class="flex gap-4"><button onclick="fetchBinanceOrders()" class="flex-1 bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black py-3 rounded-lg font-black uppercase italic transition-all border border-yellow-500/20">تحديث القائمة</button><button onclick="closeBinanceModal()" class="flex-1 bg-slate-800 py-3 text-xs font-black text-white uppercase italic rounded-lg">إغلاق</button></div>
+        </div>
+    </div>
+
     <script>
         lucide.createIcons();
         const BUY_PRICE_DEF = <?php echo $def_buy; ?>;
@@ -555,6 +601,95 @@ $transactions = $stmt->fetchAll();
 
         function openReportsModal() { document.getElementById('reportsModal').classList.remove('hidden'); window.location.hash = "reportsModal"; }
         function closeReportsModal() { document.getElementById('reportsModal').classList.add('hidden'); history.pushState("", document.title, window.location.pathname + window.location.search); }
+
+        function openBinanceModal() {
+            document.getElementById('binanceModal').classList.remove('hidden');
+            fetchBinanceOrders();
+        }
+        function closeBinanceModal() {
+            document.getElementById('binanceModal').classList.add('hidden');
+        }
+
+        function fetchBinanceOrders() {
+            const container = document.getElementById('binance-orders-container');
+            container.innerHTML = '<div class="text-center py-10 text-slate-500 font-bold italic animate-pulse">جاري الاتصال بـ Binance API...</div>';
+
+            fetch('fetch_binance_orders.php')
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    renderBinanceOrders(data.orders);
+                } else {
+                    container.innerHTML = `<div class="text-center py-10 text-rose-500 font-bold italic">${data.message}</div>`;
+                }
+            })
+            .catch(err => {
+                container.innerHTML = `<div class="text-center py-10 text-rose-500 font-bold italic">حدث خطأ في الاتصال بالسيرفر</div>`;
+            });
+        }
+
+        function renderBinanceOrders(orders) {
+            const container = document.getElementById('binance-orders-container');
+            container.innerHTML = '';
+
+            if (orders.length === 0) {
+                container.innerHTML = '<div class="text-center py-10 text-slate-500 font-bold italic">لا توجد عمليات P2P حديثة</div>';
+                return;
+            }
+
+            orders.forEach(order => {
+                const typeLabel = order.side === 'BUY' ? 'شراء' : 'بيع';
+                const typeClass = order.side === 'BUY' ? 'text-emerald-400' : 'text-rose-400';
+                const borderClass = order.side === 'BUY' ? 'border-r-emerald-500' : 'border-r-rose-500';
+
+                const card = `
+                    <div class="glass-card p-4 hover:bg-slate-800/60 transition-all border-r-4 ${borderClass} group">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center gap-3">
+                                <div class="text-right">
+                                    <p class="text-xs font-black ${typeClass} uppercase tracking-tighter">${typeLabel} - ${order.orderNumber}</p>
+                                    <p class="text-sm font-black tabular-nums text-white">${order.amount} <span class="text-[10px] opacity-50">USDT</span></p>
+                                    <p class="text-[9px] text-slate-500 font-bold">${order.createTime}</p>
+                                </div>
+                            </div>
+                            <div class="text-left flex flex-col items-end gap-2">
+                                <p class="text-sm font-black text-yellow-500 tabular-nums">${parseFloat(order.totalPrice).toLocaleString()} <span class="text-[10px] text-slate-500">${order.fiat}</span></p>
+                                <button onclick='importBinanceOrder(${JSON.stringify(order)})' class="bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black px-3 py-1.5 rounded text-[10px] font-black transition-all">اعتماد وإضافة</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += card;
+            });
+        }
+
+        function importBinanceOrder(order) {
+            // ملء النموذج الرئيسي ببيانات العملية
+            document.getElementById('enable_backdate').checked = true;
+            toggleDateInput();
+
+            // تحويل وقت بينانس (ميللي ثانية) إلى تنسيق datetime-local
+            const date = new Date(order.createTime);
+            // ضبط التوقيت ليناسب datetime-local (YYYY-MM-DDTHH:MM)
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            document.getElementById('manual_date').value = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+            document.getElementById('typeSelect').value = order.side === 'BUY' ? 'buy' : 'sell';
+            document.getElementById('crypto_amount_input').value = order.amount;
+            document.getElementById('priceInput').value = order.unitPrice;
+
+            handleTypeChange();
+            updateCalculations();
+            closeBinanceModal();
+
+            // التمرير للنموذج
+            document.getElementById('form-section').scrollIntoView({ behavior: 'smooth' });
+            showToast("تم جلب البيانات، يرجى المراجعة ثم الضغط على حفظ");
+        }
 
         function openProfitCalculator() { document.getElementById('profitCalcModal').classList.remove('hidden'); }
         function closeProfitCalculator() { document.getElementById('profitCalcModal').classList.add('hidden'); }
