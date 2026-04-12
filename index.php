@@ -23,7 +23,7 @@ $username = $_SESSION['username'] ?? 'مستخدم';
 // --- البدء بجلب البيانات الخاصة بالمستخدم الحالي فقط ---
 
 // جلب إعدادات الأسعار الافتراضية
-$settings_stmt = $pdo->prepare("SELECT default_buy_price, default_sell_price, binance_api_key, binance_api_secret, binance_fetch_limit FROM settings WHERE user_id = ?");
+$settings_stmt = $pdo->prepare("SELECT * FROM settings WHERE user_id = ?");
 $settings_stmt->execute([$user_id]);
 $settings = $settings_stmt->fetch();
 $def_buy = $settings['default_buy_price'] ?? 535;
