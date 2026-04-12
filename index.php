@@ -662,6 +662,7 @@ $transactions = $stmt->fetchAll();
                 let sourceBadge = '';
                 if(order.source === 'PAY') sourceBadge = '<span class="bg-blue-500/20 text-blue-400 px-1.5 rounded text-[8px] font-bold">Pay</span>';
                 if(order.source === 'WITHDRAW') sourceBadge = '<span class="bg-purple-500/20 text-purple-400 px-1.5 rounded text-[8px] font-bold">Withdraw</span>';
+                if(order.source === 'DEPOSIT') sourceBadge = '<span class="bg-emerald-500/20 text-emerald-400 px-1.5 rounded text-[8px] font-bold">Deposit</span>';
 
                 const card = `
                     <div class="glass-card p-4 hover:bg-slate-800/60 transition-all border-r-4 ${borderClass} group ${isImported ? 'opacity-50' : ''}">

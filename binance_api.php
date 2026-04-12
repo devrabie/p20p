@@ -113,5 +113,35 @@ class BinanceP2P {
         $data = json_decode($response, true);
         return $data ?? [];
     }
+
+    public function getDepositHistory($rows = 10, $startTimestamp = null) {
+        $endpoint = "/sapi/v1/capital/deposit/hisrec";
+        $timestamp = number_format(microtime(true) * 1000, 0, '.', '');
+
+        $params = [
+            'timestamp' => $timestamp,
+            'recvWindow' => 5000,
+            'coin' => 'USDT'
+        ];
+
+        if ($startTimestamp) {
+            $params['startTime'] = $startTimestamp;
+        }
+
+        $queryString = http_build_query($params);
+        $signature = $this->generateSignature($queryString);
+        $url = $this->baseUrl . $endpoint . '?' . $queryString . '&signature=' . $signature;
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['X-MBX-APIKEY: ' . $this->apiKey]);
+
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        $data = json_decode($response, true);
+        return $data ?? [];
+    }
 }
 ?>
