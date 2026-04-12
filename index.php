@@ -652,9 +652,10 @@ $transactions = $stmt->fetchAll();
                                     <p class="text-[9px] text-slate-500 font-bold">${order.createTime}</p>
                                 </div>
                             </div>
-                            <div class="text-left flex flex-col items-end gap-2">
+                            <div class="text-left flex flex-col items-end gap-1">
                                 <p class="text-sm font-black text-yellow-500 tabular-nums">${parseFloat(order.totalPrice).toLocaleString()} <span class="text-[10px] text-slate-500">${order.fiat}</span></p>
-                                <button onclick='importBinanceOrder(${JSON.stringify(order)})' class="bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black px-3 py-1.5 rounded text-[10px] font-black transition-all">اعتماد وإضافة</button>
+                                <p class="text-[10px] font-bold text-slate-400 italic">السعر: ${parseFloat(order.unitPrice).toLocaleString()} <span class="text-[8px]">${order.fiat}</span></p>
+                                <button onclick='importBinanceOrder(${JSON.stringify(order)})' class="mt-1 bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black px-3 py-1.5 rounded text-[10px] font-black transition-all">اعتماد وإضافة</button>
                             </div>
                         </div>
                     </div>
