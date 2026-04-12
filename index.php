@@ -638,58 +638,79 @@ $transactions = $stmt->fetchAll();
             }
 
             orders.forEach(order => {
-                const typeLabel = order.side === 'BUY' ? 'شراء' : 'بيع';
-                const typeClass = order.side === 'BUY' ? 'text-emerald-400' : 'text-rose-400';
-                const borderClass = order.side === 'BUY' ? 'border-r-emerald-500' : 'border-r-rose-500';
+                const isBuy = order.side === 'BUY';
+                const typeLabel = isBuy ? 'شراء' : 'بيع';
+                const typeBg = isBuy ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400';
+                const borderClass = isBuy ? 'border-r-emerald-500' : 'border-r-rose-500';
+                const amount = parseFloat(order.amount).toFixed(2);
+                const price = parseFloat(order.unitPrice).toFixed(2);
+                const total = parseFloat(order.totalPrice).toLocaleString();
+                const isImported = order.is_imported === true;
 
                 const card = `
-                    <div class="glass-card p-4 hover:bg-slate-800/60 transition-all border-r-4 ${borderClass} group">
-                        <div class="flex justify-between items-center">
-                            <div class="flex items-center gap-3">
+                    <div class="glass-card p-4 hover:bg-slate-800/60 transition-all border-r-4 ${borderClass} group ${isImported ? 'opacity-50' : ''}">
+                        <div class="flex justify-between items-start">
+                            <div class="flex flex-col gap-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase ${typeBg}">${typeLabel}</span>
+                                    <span class="text-[10px] font-mono text-slate-600 bg-slate-900/50 px-2 rounded tracking-tighter">#${order.orderNumber}</span>
+                                </div>
                                 <div class="text-right">
-                                    <p class="text-xs font-black ${typeClass} uppercase tracking-tighter">${typeLabel} - ${order.orderNumber}</p>
-                                    <p class="text-sm font-black tabular-nums text-white">${order.amount} <span class="text-[10px] opacity-50">USDT</span></p>
-                                    <p class="text-[9px] text-slate-500 font-bold">${order.createTime}</p>
+                                    <p class="text-lg font-black tabular-nums text-white">${amount} <span class="text-xs opacity-50">USDT</span></p>
+                                    <p class="text-[10px] text-slate-500 font-bold">${order.createTime}</p>
                                 </div>
                             </div>
                             <div class="text-left flex flex-col items-end gap-1">
-                                <p class="text-sm font-black text-yellow-500 tabular-nums">${parseFloat(order.totalPrice).toLocaleString()} <span class="text-[10px] text-slate-500">${order.fiat}</span></p>
-                                <p class="text-[10px] font-bold text-slate-400 italic">السعر: ${parseFloat(order.unitPrice).toLocaleString()} <span class="text-[8px]">${order.fiat}</span></p>
-                                <button onclick='importBinanceOrder(${JSON.stringify(order)})' class="mt-1 bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black px-3 py-1.5 rounded text-[10px] font-black transition-all">اعتماد وإضافة</button>
+                                <p class="text-base font-black text-yellow-500 tabular-nums">${total} <span class="text-[10px] text-slate-500">${order.fiat}</span></p>
+                                <p class="text-[10px] font-bold text-slate-400 italic">سعر الصرف: ${price} <span class="text-[8px]">${order.fiat}</span></p>
+                                ${isImported ?
+                                    '<span class="mt-2 text-[10px] font-black text-emerald-500 flex items-center gap-1"><i data-lucide="check-circle" class="w-3 h-3"></i> مضافة مسبقاً</span>' :
+                                    `<button id="btn-import-${order.orderNumber}" onclick='quickImportOrder(${JSON.stringify(order)})' class="mt-2 bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black px-4 py-2 rounded text-[10px] font-black transition-all border border-yellow-500/20">إضافة سريعة</button>`
+                                }
                             </div>
                         </div>
                     </div>
                 `;
                 container.innerHTML += card;
             });
+            lucide.createIcons();
         }
 
-        function importBinanceOrder(order) {
-            // ملء النموذج الرئيسي ببيانات العملية
-            document.getElementById('enable_backdate').checked = true;
-            toggleDateInput();
+        function quickImportOrder(order) {
+            const btn = document.getElementById(`btn-import-${order.orderNumber}`);
+            if(btn.disabled) return;
 
-            // تحويل وقت بينانس (ميللي ثانية) إلى تنسيق datetime-local
-            const date = new Date(order.createTime);
-            // ضبط التوقيت ليناسب datetime-local (YYYY-MM-DDTHH:MM)
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const hours = String(date.getHours()).padStart(2, '0');
-            const minutes = String(date.getMinutes()).padStart(2, '0');
-            document.getElementById('manual_date').value = `${year}-${month}-${day}T${hours}:${minutes}`;
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader" class="animate-spin w-3 h-3"></i>';
+            lucide.createIcons();
 
-            document.getElementById('typeSelect').value = order.side === 'BUY' ? 'buy' : 'sell';
-            document.getElementById('crypto_amount_input').value = order.amount;
-            document.getElementById('priceInput').value = order.unitPrice;
+            const formData = new FormData();
+            formData.append('amount', order.amount);
+            formData.append('price', order.unitPrice);
+            formData.append('type', order.side === 'BUY' ? 'buy' : 'sell');
+            formData.append('transaction_date', order.createTime);
+            formData.append('binance_order_id', order.orderNumber);
 
-            handleTypeChange();
-            updateCalculations();
-            closeBinanceModal();
-
-            // التمرير للنموذج
-            document.getElementById('form-section').scrollIntoView({ behavior: 'smooth' });
-            showToast("تم جلب البيانات، يرجى المراجعة ثم الضغط على حفظ");
+            fetch('process.php', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    btn.className = "mt-2 bg-emerald-500/20 text-emerald-500 px-4 py-2 rounded text-[10px] font-black border border-emerald-500/20";
+                    btn.innerHTML = '<i data-lucide="check" class="w-3 h-3 inline"></i> تمت الإضافة';
+                    lucide.createIcons();
+                    showToast("تم إضافة العملية بنجاح!");
+                    // لا نغلق النافذة للسماح بإضافة المزيد، ولكن نحدث البيانات خلف الكواليس إذا أمكن
+                } else {
+                    alert(data.message);
+                    btn.disabled = false;
+                    btn.innerText = "إضافة سريعة";
+                }
+            })
+            .catch(err => {
+                alert("حدث خطأ تقني");
+                btn.disabled = false;
+                btn.innerText = "إضافة سريعة";
+            });
         }
 
         function openProfitCalculator() { document.getElementById('profitCalcModal').classList.remove('hidden'); }

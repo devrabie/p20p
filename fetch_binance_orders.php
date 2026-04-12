@@ -35,6 +35,11 @@ try {
     $binance = new BinanceP2P($settings['binance_api_key'], $decrypted_secret);
     $orders = $binance->getP2POrders($settings['binance_fetch_limit'] ?: 10);
 
+    // جلب أرقام العمليات المضافة مسبقاً
+    $imported_stmt = $pdo->prepare("SELECT binance_order_id FROM transactions WHERE user_id = ? AND binance_order_id IS NOT NULL");
+    $imported_stmt->execute([$user_id]);
+    $imported_ids = $imported_stmt->fetchAll(PDO::FETCH_COLUMN);
+
     $formattedOrders = [];
     foreach ($orders as $order) {
         // تحويل الحالة والبيانات للشكل المطلوب في الواجهة
@@ -47,7 +52,8 @@ try {
             'fiat' => $order['fiat'],
             'createTime' => date('Y-m-d H:i:s', $order['createTime'] / 1000),
             'asset' => $order['asset'],
-            'status' => $order['status']
+            'status' => $order['status'],
+            'is_imported' => in_array($order['orderNumber'], $imported_ids)
         ];
     }
 

@@ -32,6 +32,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['amount'])) {
 
     // ب- معالجة التاريخ
     $transaction_date = !empty($_POST['transaction_date']) ? $_POST['transaction_date'] : date('Y-m-d H:i:s');
+    $binance_order_id = $_POST['binance_order_id'] ?? null;
+
+    // منع التكرار إذا كان الطلب من بينانس
+    if ($binance_order_id) {
+        $check = $pdo->prepare("SELECT id FROM transactions WHERE user_id = ? AND binance_order_id = ?");
+        $check->execute([$user_id, $binance_order_id]);
+        if ($check->fetch()) {
+            echo json_encode(['status' => 'error', 'message' => 'هذه العملية مضافة مسبقاً!']);
+            exit();
+        }
+    }
 
     // ج- المنطق المحاسبي (مطابق تماماً لصور بينانس)
     $total_fiat_paid = 0; 
@@ -69,13 +80,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['amount'])) {
         // أ. حفظ العملية في الجدول الرئيسي
         $sql = "INSERT INTO transactions (
                     user_id, type, crypto_amount, price_per_unit, currency, 
-                    binance_fee, manual_fee, total_fiat_paid, total_crypto_deducted, created_at
-                ) VALUES (?, ?, ?, ?, 'YER', ?, ?, ?, ?, ?)";
+                    binance_fee, manual_fee, total_fiat_paid, total_crypto_deducted, created_at, binance_order_id
+                ) VALUES (?, ?, ?, ?, 'YER', ?, ?, ?, ?, ?, ?)";
         
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
             $user_id, $type, $crypto_amount, $price_per_unit, 
-            $binance_fee, $manual_fee_final, $total_fiat_paid, $total_crypto_impact, $transaction_date
+            $binance_fee, $manual_fee_final, $total_fiat_paid, $total_crypto_impact, $transaction_date, $binance_order_id
         ]);
 
         // ب. الميزة الجديدة: تحديث السعر الافتراضي في الإعدادات تلقائياً
