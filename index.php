@@ -580,6 +580,11 @@ $transactions = $stmt->fetchAll();
                 <button onclick="closeBinanceModal()" class="bg-slate-800 p-2 rounded-lg text-white hover:bg-rose-500 transition"><i data-lucide="x" class="w-4 h-4"></i></button>
             </div>
 
+            <div class="flex items-center gap-3 mb-4 p-3 bg-slate-900/60 border border-slate-800 rounded-lg">
+                <label class="text-[10px] font-black text-slate-400 uppercase">بدءاً من تاريخ:</label>
+                <input type="date" id="binance_start_date" class="bg-slate-800 border-none text-white text-[10px] px-3 py-1.5 rounded focus:ring-1 ring-yellow-500" onchange="fetchBinanceOrders()">
+            </div>
+
             <div id="binance-orders-container" class="overflow-y-auto flex-grow custom-scrollbar space-y-3 mb-6">
                 <!-- العمليات ستظهر هنا -->
                 <div class="text-center py-10 text-slate-500 font-bold italic">جاري تحميل العمليات...</div>
@@ -604,6 +609,12 @@ $transactions = $stmt->fetchAll();
 
         function openBinanceModal() {
             document.getElementById('binanceModal').classList.remove('hidden');
+            // تعيين تاريخ اليوم كافتراضي للفلتر إذا كان فارغاً
+            const dateInput = document.getElementById('binance_start_date');
+            if(!dateInput.value) {
+                const today = new Date().toISOString().split('T')[0];
+                dateInput.value = today;
+            }
             fetchBinanceOrders();
         }
         function closeBinanceModal() {
@@ -612,9 +623,11 @@ $transactions = $stmt->fetchAll();
 
         function fetchBinanceOrders() {
             const container = document.getElementById('binance-orders-container');
+            const startDate = document.getElementById('binance_start_date').value;
+
             container.innerHTML = '<div class="text-center py-10 text-slate-500 font-bold italic animate-pulse">جاري الاتصال بـ Binance API...</div>';
 
-            fetch('fetch_binance_orders.php')
+            fetch(`fetch_binance_orders.php?start_date=${startDate}`)
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
@@ -633,9 +646,12 @@ $transactions = $stmt->fetchAll();
             container.innerHTML = '';
 
             if (orders.length === 0) {
-                container.innerHTML = '<div class="text-center py-10 text-slate-500 font-bold italic">لا توجد عمليات P2P حديثة</div>';
+                container.innerHTML = '<div class="text-center py-10 text-slate-500 font-bold italic">لا توجد عمليات P2P حديثة لهذا التاريخ</div>';
                 return;
             }
+
+            // ترتيب احدث المعاملات بالاعلى
+            orders.sort((a, b) => new Date(b.createTime) - new Date(a.createTime));
 
             orders.forEach(order => {
                 const isBuy = order.side === 'BUY';
@@ -685,11 +701,23 @@ $transactions = $stmt->fetchAll();
             lucide.createIcons();
 
             const formData = new FormData();
+            const type = order.side === 'BUY' ? 'buy' : 'sell';
             formData.append('amount', order.amount);
             formData.append('price', order.unitPrice);
-            formData.append('type', order.side === 'BUY' ? 'buy' : 'sell');
+            formData.append('type', type);
             formData.append('transaction_date', order.createTime);
             formData.append('binance_order_id', order.orderNumber);
+
+            // إضافة رسوم الصراف آلياً لعمليات الشراء
+            if (type === 'buy') {
+                const amount = parseFloat(order.amount);
+                const price = parseFloat(order.unitPrice);
+                const grossYER = (amount / 0.999) * price;
+                let manualFee = 0;
+                if (grossYER > 300000) manualFee = 200;
+                else if (grossYER > 90000) manualFee = 50;
+                formData.append('manual_fee', manualFee);
+            }
 
             fetch('process.php', { method: 'POST', body: formData })
             .then(res => res.json())
@@ -699,17 +727,18 @@ $transactions = $stmt->fetchAll();
                     btn.innerHTML = '<i data-lucide="check" class="w-3 h-3 inline"></i> تمت الإضافة';
                     lucide.createIcons();
                     showToast("تم إضافة العملية بنجاح!");
-                    // لا نغلق النافذة للسماح بإضافة المزيد، ولكن نحدث البيانات خلف الكواليس إذا أمكن
                 } else {
                     alert(data.message);
                     btn.disabled = false;
                     btn.innerText = "إضافة سريعة";
+                    lucide.createIcons();
                 }
             })
             .catch(err => {
                 alert("حدث خطأ تقني");
                 btn.disabled = false;
                 btn.innerText = "إضافة سريعة";
+                lucide.createIcons();
             });
         }
 

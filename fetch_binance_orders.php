@@ -33,7 +33,13 @@ if (!$decrypted_secret) {
 
 try {
     $binance = new BinanceP2P($settings['binance_api_key'], $decrypted_secret);
-    $orders = $binance->getP2POrders($settings['binance_fetch_limit'] ?: 10);
+
+    $startTimestamp = null;
+    if (!empty($_GET['start_date'])) {
+        $startTimestamp = strtotime($_GET['start_date'] . ' 00:00:00') * 1000;
+    }
+
+    $orders = $binance->getP2POrders($settings['binance_fetch_limit'] ?: 10, $startTimestamp);
 
     // جلب أرقام العمليات المضافة مسبقاً
     $imported_stmt = $pdo->prepare("SELECT binance_order_id FROM transactions WHERE user_id = ? AND binance_order_id IS NOT NULL");

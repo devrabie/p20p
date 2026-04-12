@@ -16,7 +16,7 @@ class BinanceP2P {
         return hash_hmac('sha256', $queryString, $this->apiSecret);
     }
 
-    public function getP2POrders($rows = 10) {
+    public function getP2POrders($rows = 10, $startTimestamp = null) {
         $endpoint = "/sapi/v1/c2c/orderMatch/listUserOrderHistory";
         $timestamp = number_format(microtime(true) * 1000, 0, '.', '');
 
@@ -25,6 +25,10 @@ class BinanceP2P {
             'recvWindow' => 5000,
             'rows' => $rows
         ];
+
+        if ($startTimestamp) {
+            $params['startTimestamp'] = $startTimestamp;
+        }
 
         $queryString = http_build_query($params);
         $signature = $this->generateSignature($queryString);
