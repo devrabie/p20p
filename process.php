@@ -7,8 +7,7 @@
 session_start();
 require_once 'db.php';
 
-// 1. ضبط توقيت السيرفر لليمن (GMT+3)
-date_default_timezone_set('Asia/Aden');
+// 1. ضبط توقيت السيرفر لليمن (GMT+3) (مضبوط في db.php)
 
 // تجهيز نوع الرد ليكون JSON دائماً
 header('Content-Type: application/json');

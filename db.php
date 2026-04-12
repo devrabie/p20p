@@ -16,6 +16,9 @@ $options = [
     PDO::ATTR_EMULATE_PREPARES   => false,
 ];
 
+// ضبط التوقيت الافتراضي لـ PHP لليمن
+date_default_timezone_set('Asia/Aden');
+
 try {
      $pdo = new PDO($dsn, $user, $pass, $options);
      

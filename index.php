@@ -8,7 +8,7 @@ session_start();
 require_once 'db.php'; 
 
 // 1. ضبط التوقيت لليمن (GMT+3) لضمان دقة العمليات الحالية واليومية
-date_default_timezone_set('Asia/Aden');
+// (مضبوط الآن في db.php)
 $pdo->exec("SET time_zone = '+03:00'");
 $today = date('Y-m-d');
 
