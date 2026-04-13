@@ -583,8 +583,8 @@ $transactions = $stmt->fetchAll();
     </div>
 
     <!-- نافذة جلب عمليات بينانس -->
-    <div id="binanceModal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-[999]">
-        <div class="glass-card w-full max-w-2xl p-6 border-2 border-yellow-500/30 shadow-2xl text-right flex flex-col max-h-[90vh]">
+    <div id="binanceModal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center p-2 md:p-4 z-[999]">
+        <div class="glass-card w-full max-w-4xl p-4 md:p-8 border-2 border-yellow-500/30 shadow-2xl text-right flex flex-col max-h-[95vh]">
             <div class="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
                 <h2 class="text-lg font-black text-yellow-500 flex items-center gap-3 italic uppercase tracking-widest"><i data-lucide="refresh-cw"></i> عمليات P2P الأخيرة</h2>
                 <button onclick="closeBinanceModal()" class="bg-slate-800 p-2 rounded-lg text-white hover:bg-rose-500 transition"><i data-lucide="x" class="w-4 h-4"></i></button>
@@ -688,48 +688,72 @@ $transactions = $stmt->fetchAll();
                 const borderClass = isBuy ? 'border-r-emerald-500' : 'border-r-rose-500';
 
                 let statusBadge = '';
-                if(isCompleted) statusBadge = '<span class="bg-emerald-500/10 text-emerald-500 px-1.5 rounded text-[8px] font-bold">مكتملة</span>';
-                else if(isCancelled) statusBadge = '<span class="bg-rose-500/10 text-rose-500 px-1.5 rounded text-[8px] font-bold">ملغية</span>';
-                else statusBadge = '<span class="bg-yellow-500/10 text-yellow-500 px-1.5 rounded text-[8px] font-bold">قيد الانتظار</span>';
+                if(isCompleted) statusBadge = '<span class="bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded text-[8px] font-black">مكتملة</span>';
+                else if(isCancelled) statusBadge = '<span class="bg-rose-500/10 text-rose-500 px-1.5 py-0.5 rounded text-[8px] font-black">ملغية</span>';
+                else statusBadge = '<span class="bg-yellow-500/10 text-yellow-500 px-1.5 py-0.5 rounded text-[8px] font-black">قيد الانتظار</span>';
 
                 const amount = parseFloat(order.amount).toFixed(2);
                 const isP2P = order.source === 'P2P';
                 const isImported = order.is_imported === true;
 
                 let sourceBadge = '';
-                if(order.source === 'PAY') sourceBadge = '<span class="bg-blue-500/20 text-blue-400 px-1.5 rounded text-[8px] font-bold">Pay</span>';
-                if(order.source === 'WITHDRAW') sourceBadge = '<span class="bg-purple-500/20 text-purple-400 px-1.5 rounded text-[8px] font-bold">Withdraw</span>';
-                if(order.source === 'DEPOSIT') sourceBadge = '<span class="bg-emerald-500/20 text-emerald-400 px-1.5 rounded text-[8px] font-bold">Deposit</span>';
+                if(order.source === 'PAY') sourceBadge = '<span class="bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest">PAY</span>';
+                if(order.source === 'WITHDRAW') sourceBadge = '<span class="bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest">WITHDRAW</span>';
+                if(order.source === 'DEPOSIT') sourceBadge = '<span class="bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest">DEPOSIT</span>';
 
                 const card = `
-                    <div class="glass-card p-4 hover:bg-slate-800/60 transition-all border-r-4 ${borderClass} group ${isImported || isCancelled ? 'opacity-50' : ''}">
-                        <div class="flex justify-between items-start">
-                            <div class="flex flex-col gap-2">
-                                <div class="flex items-center gap-2">
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase ${typeBg}">${typeLabel}</span>
+                    <div class="relative glass-card p-5 hover:bg-slate-800/60 transition-all border-r-4 ${borderClass} group ${isImported || isCancelled ? 'opacity-60' : ''} overflow-hidden">
+
+                        <!-- زر JSON في الركن العلوي الأيسر (LTR context for the icon) -->
+                        <div class="absolute top-0 left-0">
+                            <button onclick='showRawJson(${JSON.stringify(order.raw)})' class="p-2.5 text-slate-600 hover:text-blue-400 hover:bg-blue-500/10 transition-all rounded-br-xl" title="بيانات JSON">
+                                <i data-lucide="code" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+
+                            <!-- القسم الأيمن: معلومات العملية الأساسية -->
+                            <div class="flex flex-col gap-3 flex-grow">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="px-3 py-1 rounded-full text-[9px] font-black uppercase ${typeBg} tracking-widest">${typeLabel}</span>
                                     ${sourceBadge} ${statusBadge}
-                                    <span class="text-[10px] font-mono text-slate-600 bg-slate-900/50 px-2 rounded tracking-tighter">#${order.orderNumber.toString().substring(0,10)}...</span>
+                                    <span class="text-[9px] font-mono text-slate-500 bg-black/30 px-2 py-0.5 rounded border border-slate-800 tracking-tighter">#${order.orderNumber.toString().substring(0,12)}...</span>
                                 </div>
                                 <div class="text-right">
-                                    <p class="text-lg font-black tabular-nums text-white">${amount} <span class="text-xs opacity-50">USDT</span></p>
-                                    <p class="text-[10px] text-slate-500 font-bold">${order.createTime}</p>
+                                    <p class="text-xl md:text-2xl font-black tabular-nums text-white flex items-baseline gap-2">
+                                        ${amount} <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">USDT</span>
+                                    </p>
+                                    <p class="text-[10px] text-slate-500 font-bold flex items-center gap-1 mt-1">
+                                        <i data-lucide="clock" class="w-3 h-3"></i> ${order.createTime}
+                                    </p>
                                 </div>
                             </div>
-                            <div class="text-left flex flex-col items-end gap-1">
-                                ${isP2P ? `
-                                    <p class="text-base font-black text-yellow-500 tabular-nums">${parseFloat(order.totalPrice).toLocaleString()} <span class="text-[10px] text-slate-500">${order.fiat}</span></p>
-                                    <p class="text-[10px] font-bold text-slate-400 italic">سعر الصرف: ${parseFloat(order.unitPrice).toFixed(2)}</p>
-                                ` : `
-                                    <p class="text-[10px] text-slate-500 italic mb-2">عملية خارج P2P</p>
-                                `}
 
-                                <div class="flex items-center gap-2 mt-2">
-                                    <button onclick='showRawJson(${JSON.stringify(order.raw)})' class="bg-slate-800 text-slate-400 p-2 rounded hover:text-white transition-all" title="عرض البيانات الخام JSON"><i data-lucide="code" class="w-3 h-3"></i></button>
+                            <!-- القسم الأيسر: المبالغ والأزرار -->
+                            <div class="flex flex-col items-end gap-3 w-full md:w-auto">
+                                <div class="text-left bg-black/20 p-3 rounded-xl border border-white/5 w-full md:min-w-[180px]">
+                                    ${isP2P ? `
+                                        <p class="text-lg font-black text-yellow-500 tabular-nums flex items-center justify-end gap-2">
+                                            ${parseFloat(order.totalPrice).toLocaleString()}
+                                            <span class="text-[10px] text-slate-400 font-bold">${order.fiat}</span>
+                                        </p>
+                                        <p class="text-[10px] font-bold text-slate-500 italic text-right mt-1">سعر الصرف: ${parseFloat(order.unitPrice).toFixed(2)}</p>
+                                    ` : `
+                                        <p class="text-[10px] text-slate-500 italic text-center py-2 font-bold uppercase tracking-widest">عملية خارج نظام P2P</p>
+                                    `}
+                                </div>
+
+                                <div class="flex items-center gap-3 w-full justify-end">
                                     ${isImported ?
-                                        '<span class="text-[10px] font-black text-emerald-500 flex items-center gap-1"><i data-lucide="check-circle" class="w-3 h-3"></i> مضافة</span>' :
+                                        '<span class="bg-emerald-500/10 text-emerald-500 px-4 py-2 rounded-xl text-[10px] font-black flex items-center gap-2 border border-emerald-500/20"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i> مضافة مسبقاً</span>' :
                                         (!isCompleted ? '' : (isP2P ?
-                                            `<button id="btn-import-${order.orderNumber}" onclick='quickImportOrder(${JSON.stringify(order)})' class="bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black px-4 py-2 rounded text-[10px] font-black transition-all border border-yellow-500/20">إضافة سريعة</button>` :
-                                            `<button onclick='manualImportToForm(${JSON.stringify(order)})' class="bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white px-4 py-2 rounded text-[10px] font-black transition-all border border-blue-500/20">إدراج للنموذج</button>`
+                                            `<button id="btn-import-${order.orderNumber}" onclick='quickImportOrder(${JSON.stringify(order)})' class="flex-grow md:flex-none bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black px-6 py-2.5 rounded-xl text-[10px] font-black transition-all border border-yellow-500/20 flex items-center justify-center gap-2 shadow-lg shadow-yellow-500/5 active:scale-95">
+                                                <i data-lucide="zap" class="w-3.5 h-3.5"></i> إضافة سريعة
+                                            </button>` :
+                                            `<button onclick='manualImportToForm(${JSON.stringify(order)})' class="flex-grow md:flex-none bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white px-6 py-2.5 rounded-xl text-[10px] font-black transition-all border border-blue-500/20 flex items-center justify-center gap-2 active:scale-95">
+                                                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i> إدراج للنموذج
+                                            </button>`
                                         ))
                                     }
                                 </div>
