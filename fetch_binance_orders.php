@@ -54,6 +54,11 @@ try {
 
     // 1. معالجة عمليات P2P
     foreach ($orders as $order) {
+        // تجاهل العمليات الملغية في P2P
+        if ($order['status'] === 'CANCELLED' || $order['status'] === 'CANCELLED_BY_SYSTEM') {
+            continue;
+        }
+
         $formattedOrders[] = [
             'source' => 'P2P',
             'orderNumber' => $order['orderNumber'],
@@ -92,7 +97,8 @@ try {
 
     // 3. معالجة عمليات الإيداع (Deposits)
     foreach ($deposits as $dp) {
-        if ($dp['coin'] === 'USDT') {
+        // الحالة 1 تعني نجاح الإيداع
+        if ($dp['coin'] === 'USDT' && $dp['status'] == 1) {
             $formattedOrders[] = [
                 'source' => 'DEPOSIT',
                 'orderNumber' => $dp['txId'] ?: $dp['id'],
@@ -112,7 +118,8 @@ try {
 
     // 4. معالجة عمليات السحب (Withdrawals)
     foreach ($withdrawals as $wd) {
-        if ($wd['coin'] === 'USDT') {
+        // الحالة 6 تعني نجاح السحب
+        if ($wd['coin'] === 'USDT' && $wd['status'] == 6) {
             $formattedOrders[] = [
                 'source' => 'WITHDRAW',
                 'orderNumber' => $wd['id'],

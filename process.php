@@ -49,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['amount'])) {
     $binance_fee = 0;
 
     if ($type == 'sell') {
-        // حالة البيع: الرسوم تُضاف فوق المبلغ المباع
+        // حالة البيع: الرسوم تُخصم من الرصيد فوق المبلغ المباع (التأثير الإجمالي على المخزون)
         if (isset($_POST['binance_fee']) && $_POST['binance_fee'] !== '') {
             $binance_fee = floatval($_POST['binance_fee']);
         } else {
@@ -59,14 +59,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['amount'])) {
         $total_fiat_paid = $crypto_amount * $price_per_unit;
         $manual_fee_final = 0;
     } else {
-        // حالة الشراء: الهندسة العكسية
+        // حالة الشراء: الكمية الصافية التي تدخل المحفظة هي crypto_amount
         if (isset($_POST['binance_fee']) && $_POST['binance_fee'] !== '' && floatval($_POST['binance_fee']) >= 0) {
             $binance_fee = floatval($_POST['binance_fee']);
+            // في الشراء من بينانس، الكمية المدخلة غالباً هي الصافية، والرسوم مخصومة من المبلغ الكلي المدفوع
             $gross_crypto = $crypto_amount + $binance_fee;
         } else {
             $gross_crypto = $crypto_amount / 0.999;
             $binance_fee = $gross_crypto - $crypto_amount;
         }
+        // الكمية التي تدخل المخزون هي الصافية (crypto_amount)
         $total_crypto_impact = $crypto_amount;
         $total_fiat_paid = ($gross_crypto * $price_per_unit) + $manual_fiat_fee;
         $manual_fee_final = $manual_fiat_fee;
