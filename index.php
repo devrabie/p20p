@@ -682,9 +682,18 @@ $transactions = $stmt->fetchAll();
 
             orders.forEach(order => {
                 const isBuy = order.side === 'BUY';
+                const isCompleted = order.status === 'COMPLETED';
+                const isCancelled = order.status === 'CANCELLED' || order.status === 'FAILED';
+
                 const typeLabel = isBuy ? 'شراء' : 'بيع';
                 const typeBg = isBuy ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400';
                 const borderClass = isBuy ? 'border-r-emerald-500' : 'border-r-rose-500';
+
+                let statusBadge = '';
+                if(isCompleted) statusBadge = '<span class="bg-emerald-500/10 text-emerald-500 px-1.5 rounded text-[8px] font-bold">مكتملة</span>';
+                else if(isCancelled) statusBadge = '<span class="bg-rose-500/10 text-rose-500 px-1.5 rounded text-[8px] font-bold">ملغية</span>';
+                else statusBadge = '<span class="bg-yellow-500/10 text-yellow-500 px-1.5 rounded text-[8px] font-bold">قيد الانتظار</span>';
+
                 const amount = parseFloat(order.amount).toFixed(2);
                 const isP2P = order.source === 'P2P';
                 const isImported = order.is_imported === true;
@@ -695,12 +704,12 @@ $transactions = $stmt->fetchAll();
                 if(order.source === 'DEPOSIT') sourceBadge = '<span class="bg-emerald-500/20 text-emerald-400 px-1.5 rounded text-[8px] font-bold">Deposit</span>';
 
                 const card = `
-                    <div class="glass-card p-4 hover:bg-slate-800/60 transition-all border-r-4 ${borderClass} group ${isImported ? 'opacity-50' : ''}">
+                    <div class="glass-card p-4 hover:bg-slate-800/60 transition-all border-r-4 ${borderClass} group ${isImported || isCancelled ? 'opacity-50' : ''}">
                         <div class="flex justify-between items-start">
                             <div class="flex flex-col gap-2">
                                 <div class="flex items-center gap-2">
                                     <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase ${typeBg}">${typeLabel}</span>
-                                    ${sourceBadge}
+                                    ${sourceBadge} ${statusBadge}
                                     <span class="text-[10px] font-mono text-slate-600 bg-slate-900/50 px-2 rounded tracking-tighter">#${order.orderNumber.toString().substring(0,10)}...</span>
                                 </div>
                                 <div class="text-right">
@@ -720,9 +729,10 @@ $transactions = $stmt->fetchAll();
                                     <button onclick='showRawJson(${JSON.stringify(order.raw)})' class="bg-slate-800 text-slate-400 p-2 rounded hover:text-white transition-all" title="عرض البيانات الخام JSON"><i data-lucide="code" class="w-3 h-3"></i></button>
                                     ${isImported ?
                                         '<span class="text-[10px] font-black text-emerald-500 flex items-center gap-1"><i data-lucide="check-circle" class="w-3 h-3"></i> مضافة</span>' :
-                                        isP2P ?
+                                        (!isCompleted ? '' : (isP2P ?
                                             `<button id="btn-import-${order.orderNumber}" onclick='quickImportOrder(${JSON.stringify(order)})' class="bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black px-4 py-2 rounded text-[10px] font-black transition-all border border-yellow-500/20">إضافة سريعة</button>` :
                                             `<button onclick='manualImportToForm(${JSON.stringify(order)})' class="bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white px-4 py-2 rounded text-[10px] font-black transition-all border border-blue-500/20">إدراج للنموذج</button>`
+                                        ))
                                     }
                                 </div>
                             </div>

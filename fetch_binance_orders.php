@@ -13,7 +13,7 @@ if (!isset($_SESSION['user_id'])) {
 $user_id = $_SESSION['user_id'];
 
 // جلب المفاتيح من قاعدة البيانات
-$stmt = $pdo->prepare("SELECT binance_api_key, binance_api_secret, binance_fetch_limit FROM settings WHERE user_id = ?");
+$stmt = $pdo->prepare("SELECT * FROM settings WHERE user_id = ?");
 $stmt->execute([$user_id]);
 $settings = $stmt->fetch();
 
@@ -45,6 +45,8 @@ try {
     }
 
     $fetch_limit = $settings['binance_fetch_limit'] ?: 10;
+
+    // جلب البيانات من المصادر المختلفة
     $orders = $binance->getP2POrders($fetch_limit, $startTimestamp, $endTimestamp);
     $pay_txs = $binance->getPayTransactions($fetch_limit, $startTimestamp, $endTimestamp);
     $withdrawals = $binance->getWithdrawHistory($fetch_limit, $startTimestamp, $endTimestamp);
@@ -59,22 +61,18 @@ try {
 
     // 1. معالجة عمليات P2P
     foreach ($orders as $order) {
-        // تجاهل العمليات الملغية في P2P
-        if ($order['status'] === 'CANCELLED' || $order['status'] === 'CANCELLED_BY_SYSTEM') {
-            continue;
-        }
-
         $formattedOrders[] = [
             'source' => 'P2P',
             'orderNumber' => $order['orderNumber'],
-            'side' => $order['tradeType'], // BUY or SELL
-            'amount' => $order['amount'],
+            'side' => $order['tradeType'],
+            'amount' => abs(floatval($order['amount'])),
             'unitPrice' => $order['unitPrice'],
             'totalPrice' => $order['totalPrice'],
             'fiat' => $order['fiat'],
+            'binance_fee' => $order['commission'] ?? 0,
             'createTime' => date('Y-m-d H:i:s', $order['createTime'] / 1000),
             'asset' => $order['asset'],
-            'status' => $order['status'],
+            'status' => $order['orderStatus'], // COMPLETED, CANCELLED, etc.
             'is_imported' => in_array($order['orderNumber'], $imported_ids),
             'raw' => $order
         ];
@@ -83,19 +81,20 @@ try {
     // 2. معالجة عمليات Binance Pay (USDT فقط)
     foreach ($pay_txs as $tx) {
         if ($tx['currency'] === 'USDT') {
-            $type = $tx['type']; // RECEIVE, SEND, etc.
+            $raw_amount = floatval($tx['amount']);
             $formattedOrders[] = [
                 'source' => 'PAY',
                 'orderNumber' => $tx['orderId'],
-                'side' => ($type === 'RECEIVE' || $type === 'TRANSFER_IN') ? 'BUY' : 'SELL',
-                'amount' => $tx['amount'],
-                'unitPrice' => 0, // Pay doesn't have exchange rate
+                'side' => ($raw_amount > 0) ? 'BUY' : 'SELL',
+                'amount' => abs($raw_amount),
+                'unitPrice' => 0,
                 'totalPrice' => 0,
                 'fiat' => 'USDT',
+                'binance_fee' => 0,
                 'createTime' => date('Y-m-d H:i:s', $tx['transactionTime'] / 1000),
                 'asset' => 'USDT',
                 'status' => 'COMPLETED',
-                'note' => $tx['productName'] ?? $type,
+                'note' => $tx['note'] ?? ($tx['productName'] ?? ''),
                 'is_imported' => in_array($tx['orderId'], $imported_ids),
                 'raw' => $tx
             ];
@@ -104,20 +103,20 @@ try {
 
     // 3. معالجة عمليات الإيداع (Deposits)
     foreach ($deposits as $dp) {
-        // الحالة 1 تعني نجاح الإيداع
-        if ($dp['coin'] === 'USDT' && $dp['status'] == 1) {
+        if ($dp['coin'] === 'USDT') {
+            $status_map = [0 => 'PENDING', 1 => 'COMPLETED', 6 => 'COMPLETED'];
             $formattedOrders[] = [
                 'source' => 'DEPOSIT',
                 'orderNumber' => $dp['txId'] ?: $dp['id'],
-                'side' => 'BUY', // Deposit is always an incoming operation
-                'amount' => $dp['amount'],
+                'side' => 'BUY',
+                'amount' => abs(floatval($dp['amount'])),
                 'unitPrice' => 0,
                 'totalPrice' => 0,
                 'fiat' => 'USDT',
                 'binance_fee' => 0,
                 'createTime' => date('Y-m-d H:i:s', $dp['insertTime'] / 1000),
                 'asset' => 'USDT',
-                'status' => ($dp['status'] == 1) ? 'COMPLETED' : 'PENDING',
+                'status' => $status_map[$dp['status']] ?? 'OTHER',
                 'is_imported' => in_array($dp['txId'] ?: $dp['id'], $imported_ids),
                 'raw' => $dp
             ];
@@ -126,19 +125,20 @@ try {
 
     // 4. معالجة عمليات السحب (Withdrawals)
     foreach ($withdrawals as $wd) {
-        // الحالة 6 تعني نجاح السحب
-        if ($wd['coin'] === 'USDT' && $wd['status'] == 6) {
+        if ($wd['coin'] === 'USDT') {
+            $status_map = [6 => 'COMPLETED', 1 => 'PENDING', 3 => 'CANCELLED', 5 => 'FAILED'];
             $formattedOrders[] = [
                 'source' => 'WITHDRAW',
                 'orderNumber' => $wd['id'],
-                'side' => 'SELL', // Withdrawal is always an outgoing operation
-                'amount' => $wd['amount'],
+                'side' => 'SELL',
+                'amount' => abs(floatval($wd['amount'])),
                 'unitPrice' => 0,
                 'totalPrice' => 0,
                 'fiat' => 'USDT',
+                'binance_fee' => $wd['transactionFee'] ?? 0,
                 'createTime' => date('Y-m-d H:i:s', strtotime($wd['applyTime'])),
                 'asset' => 'USDT',
-                'status' => ($wd['status'] == 6) ? 'COMPLETED' : 'PENDING',
+                'status' => $status_map[$wd['status']] ?? 'OTHER',
                 'is_imported' => in_array($wd['id'], $imported_ids),
                 'raw' => $wd
             ];
