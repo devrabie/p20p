@@ -709,18 +709,33 @@ $transactions = $stmt->fetchAll();
             const dt = order.createTime.replace(" ", "T").substring(0, 16);
             document.getElementById('manual_date').value = dt;
 
-            document.getElementById('typeSelect').value = order.side === 'BUY' ? 'buy' : 'sell';
-            document.getElementById('crypto_amount_input').value = order.amount;
+            const type = order.side === 'BUY' ? 'buy' : 'sell';
+            document.getElementById('typeSelect').value = type;
+
+            const fee = parseFloat(order.binance_fee || 0);
+            let amount = parseFloat(order.amount);
+
+            // تصحيح الكمية: في الشراء فقط، الكمية الصافية للمخزون هي المبلغ ناقص الرسوم
+            // في البيع والسحب، الكمية التي تخرج من المحفظة هي المبلغ المكتوب في بينانس
+            if (type === 'buy') {
+                amount = amount - fee;
+            }
+
+            document.getElementById('crypto_amount_input').value = amount.toFixed(8);
 
             // لعمليات Pay و Withdraw، السعر غالباً غير معروف، نترك للمستخدم إدخاله
-            document.getElementById('priceInput').value = order.side === 'BUY' ? BUY_PRICE_DEF : SELL_PRICE_DEF;
+            document.getElementById('priceInput').value = type === 'buy' ? BUY_PRICE_DEF : SELL_PRICE_DEF;
+
+            if (order.binance_fee !== undefined && order.binance_fee !== null) {
+                document.getElementById('binance_fee_input').value = fee;
+            }
 
             handleTypeChange();
             updateCalculations();
             closeBinanceModal();
 
             document.getElementById('form-section').scrollIntoView({ behavior: 'smooth' });
-            showToast("تم إدراج البيانات، يرجى إكمال السعر ثم الحفظ");
+            showToast("تم إدراج البيانات، يرجى مراجعة السعر والرسوم ثم الحفظ");
         }
 
         function quickImportOrder(order) {
@@ -733,11 +748,24 @@ $transactions = $stmt->fetchAll();
 
             const formData = new FormData();
             const type = order.side === 'BUY' ? 'buy' : 'sell';
-            formData.append('amount', order.amount);
+            const fee = parseFloat(order.binance_fee || 0);
+            let amount = parseFloat(order.amount);
+
+            // تصحيح الكمية: في الشراء فقط نخصم الرسوم لنسجل الصافي الذي دخل المحفظة
+            if (type === 'buy') {
+                amount = amount - fee;
+            }
+
+            formData.append('amount', amount.toFixed(8));
             formData.append('price', order.unitPrice);
             formData.append('type', type);
             formData.append('transaction_date', order.createTime);
             formData.append('binance_order_id', order.orderNumber);
+
+            // استخدام الرسوم الحقيقية من بينانس إذا توفرت
+            if (order.binance_fee !== undefined && order.binance_fee !== null) {
+                formData.append('binance_fee', fee);
+            }
 
             // إضافة رسوم الصراف آلياً لعمليات الشراء
             if (type === 'buy') {

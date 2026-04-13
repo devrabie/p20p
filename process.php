@@ -49,13 +49,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['amount'])) {
     $binance_fee = 0;
 
     if ($type == 'sell') {
-        // حالة البيع: الرسوم تُخصم من الرصيد فوق المبلغ المباع (التأثير الإجمالي على المخزون)
+        // حالة البيع: التأثير على المخزون هو الكمية المباعة فقط لضمان مطابقة محفظة بينانس
         if (isset($_POST['binance_fee']) && $_POST['binance_fee'] !== '') {
             $binance_fee = floatval($_POST['binance_fee']);
         } else {
             $binance_fee = $crypto_amount * 0.001;
         }
-        $total_crypto_impact = $crypto_amount + $binance_fee;
+        $total_crypto_impact = $crypto_amount; // تم التعديل: لا نخصم الرسوم من المخزون لأن بينانس لا تفعل ذلك
         $total_fiat_paid = $crypto_amount * $price_per_unit;
         $manual_fee_final = 0;
     } else {
