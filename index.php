@@ -715,30 +715,31 @@ $transactions = $stmt->fetchAll();
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
 
                             <!-- القسم الأيمن: دمج البيانات في كتلة واحدة -->
-                            <div class="flex flex-col gap-2 flex-grow">
+                            <div class="flex flex-col gap-2 flex-grow w-full">
                                 <div class="flex flex-wrap items-center gap-2">
                                     <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase ${typeBg} tracking-widest">${typeLabel}</span>
                                     ${sourceBadge} ${statusBadge}
                                     <span class="text-[8px] font-mono text-slate-500 bg-black/30 px-2 py-0.5 rounded border border-slate-800 tracking-tighter">#${order.orderNumber.toString().substring(0,10)}...</span>
                                 </div>
 
-                                <div class="bg-black/20 p-2.5 rounded-lg border border-white/5 space-y-0.5">
-                                    <div class="flex items-center gap-1.5 text-white font-black">
-                                        <span class="text-sm tabular-nums">${amount}</span>
-                                        <span class="text-[8px] opacity-50 uppercase tracking-widest">USDT</span>
+                                <div class="bg-black/20 p-3 rounded-lg border border-white/5 space-y-1 w-full">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-1.5 text-white font-black">
+                                            <span class="text-sm tabular-nums">${amount}</span>
+                                            <span class="text-[8px] opacity-50 uppercase tracking-widest">USDT</span>
+                                        </div>
+                                        <div class="flex items-center gap-1.5 text-yellow-500 font-black">
+                                            <span class="text-sm tabular-nums">${isP2P ? parseFloat(order.totalPrice).toLocaleString() : '--'}</span>
+                                            <span class="text-[8px] opacity-50 font-bold">﷼ ${order.fiat}</span>
+                                        </div>
                                     </div>
 
-                                    <div class="flex items-center gap-1.5 text-yellow-500 font-black">
-                                        <span class="text-sm tabular-nums">${isP2P ? parseFloat(order.totalPrice).toLocaleString() : '--'}</span>
-                                        <span class="text-[8px] opacity-50 font-bold">﷼ ${order.fiat}</span>
-                                    </div>
-
-                                    <div class="text-[8px] text-slate-500 font-bold flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                                    <div class="text-[8px] text-slate-500 font-bold flex flex-wrap gap-x-4 gap-y-1 mt-1 border-t border-white/5 pt-1">
                                         <span>سعر الصرف: <span class="text-slate-300 tabular-nums">${isP2P ? parseFloat(order.unitPrice).toFixed(2) : '--'}</span> ﷼</span>
                                         <span>رسوم: <span class="text-rose-400 tabular-nums">${parseFloat(order.binance_fee).toFixed(4)}</span></span>
                                     </div>
 
-                                    <div class="text-[8px] text-slate-600 font-bold pt-1 border-t border-white/5 flex items-center gap-1 mt-1">
+                                    <div class="text-[8px] text-slate-600 font-bold pt-1 flex items-center gap-1">
                                         <i data-lucide="clock" class="w-2.5 h-2.5"></i> ${order.createTime}
                                     </div>
                                 </div>
