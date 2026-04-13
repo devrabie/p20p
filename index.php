@@ -1095,7 +1095,17 @@ $transactions = $stmt->fetchAll();
         });
 
         // --- نظام السجل المتطور ---
-        const rawTransactions = <?php echo json_encode($transactions); ?>;
+        let rawTransactions = <?php echo json_encode($transactions); ?>;
+
+        // حساب المخزون قبل وبعد لكل عملية (تراكمي عكسي لأن البيانات مرتبة من الأحدث للأقدم)
+        let runningStock = <?php echo $remaining_stock; ?>;
+        rawTransactions.forEach((t, i) => {
+            t.stock_after = runningStock;
+            const impact = (t.type === 'buy') ? parseFloat(t.crypto_amount) : -parseFloat(t.total_crypto_deducted);
+            t.stock_before = runningStock - impact;
+            runningStock = t.stock_before; // تحديث المخزون للعملية التي قبلها (أقدم منها)
+        });
+
         let filteredTransactions = [...rawTransactions];
         let currentFilter = 'all';
         let itemsToShow = 20;
@@ -1145,7 +1155,13 @@ $transactions = $stmt->fetchAll();
                                 </div>
                                 <div>
                                     <p class="text-sm font-black tabular-nums">${parseFloat(t.crypto_amount).toLocaleString()} <span class="text-[10px] opacity-50">USDT</span></p>
-                                    <p class="text-[9px] text-slate-500 font-bold">${txDate.toLocaleTimeString('ar-YE', timeOptions)}</p>
+                                    <div class="flex items-center gap-2 mt-0.5">
+                                        <p class="text-[9px] text-slate-500 font-bold">${txDate.toLocaleTimeString('ar-YE', timeOptions)}</p>
+                                        <div class="flex items-center gap-1.5 border-r border-slate-700 pr-2 mr-0.5">
+                                            <span class="text-[8px] text-slate-500 font-bold">قبل: <span class="text-slate-400 tabular-nums">${t.stock_before.toFixed(2)}</span></span>
+                                            <span class="text-[8px] text-slate-500 font-bold">بعد: <span class="text-white tabular-nums">${t.stock_after.toFixed(2)}</span></span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="text-left">
