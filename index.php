@@ -232,6 +232,9 @@ $transactions = $stmt->fetchAll();
             </div>
 
             <div class="flex flex-wrap justify-center md:justify-end items-center gap-2 md:gap-3">
+                <button onclick="window.location.reload()" class="glass-card bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all border border-emerald-500/20 active:scale-95" title="تحديث البيانات">
+                    <i data-lucide="refresh-ccw" class="w-3.5 h-3.5"></i> تحديث
+                </button>
                 <?php if ($api_key && $api_secret): ?>
                 <button onclick="openBinanceModal()" class="glass-card bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all border border-yellow-500/20 active:scale-95">
                     <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> جلب من بينانس
@@ -1166,7 +1169,10 @@ $transactions = $stmt->fetchAll();
                             </div>
                             <div class="text-left">
                                 <p class="text-sm font-black text-white tabular-nums">${parseFloat(t.total_fiat_paid).toLocaleString()} <span class="text-[10px] text-slate-500">YER</span></p>
-                                <p class="text-[9px] text-slate-500 italic">سعر الصرف: ${t.price_per_unit}</p>
+                                <div class="flex flex-col items-end">
+                                    <p class="text-[9px] text-slate-500 italic">سعر الصرف: ${t.price_per_unit}</p>
+                                    ${t.type === 'sell' ? `<p class="text-[10px] font-black text-emerald-500 tabular-nums mt-0.5"><i data-lucide="trending-up" class="w-2.5 h-2.5 inline ml-0.5"></i>+${parseFloat(t.fifo_profit).toLocaleString()} <span class="text-[8px] opacity-60">ربح</span></p>` : ''}
+                                </div>
                             </div>
                             <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button onclick='openEditModal(${JSON.stringify(t)})' class="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg"><i data-lucide="edit-3" class="w-3.5 h-3.5"></i></button>
