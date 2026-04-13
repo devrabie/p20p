@@ -572,6 +572,18 @@ $transactions = $stmt->fetchAll();
         </div>
     </div>
 
+    <!-- نافذة عرض JSON الخام -->
+    <div id="jsonModal" class="hidden fixed inset-0 bg-black/98 flex items-center justify-center p-4 z-[1001]">
+        <div class="glass-card w-full max-w-lg p-6 border-2 border-blue-500/30 shadow-2xl text-left flex flex-col max-h-[80vh]">
+            <div class="flex justify-between items-center mb-4 pb-2 border-b border-slate-800">
+                <h3 class="text-xs font-black text-blue-400 uppercase tracking-widest italic">Binance Raw Data (JSON)</h3>
+                <button onclick="document.getElementById('jsonModal').classList.add('hidden')" class="text-slate-500 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <pre id="json-display" class="bg-black/50 p-4 rounded text-[10px] font-mono text-emerald-400 overflow-auto custom-scrollbar flex-grow dir-ltr text-left"></pre>
+            <button onclick="document.getElementById('jsonModal').classList.add('hidden')" class="mt-4 w-full bg-slate-800 py-2 text-[10px] font-bold text-white rounded">إغلاق</button>
+        </div>
+    </div>
+
     <!-- نافذة جلب عمليات بينانس -->
     <div id="binanceModal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-[999]">
         <div class="glass-card w-full max-w-2xl p-6 border-2 border-yellow-500/30 shadow-2xl text-right flex flex-col max-h-[90vh]">
@@ -580,9 +592,15 @@ $transactions = $stmt->fetchAll();
                 <button onclick="closeBinanceModal()" class="bg-slate-800 p-2 rounded-lg text-white hover:bg-rose-500 transition"><i data-lucide="x" class="w-4 h-4"></i></button>
             </div>
 
-            <div class="flex items-center gap-3 mb-4 p-3 bg-slate-900/60 border border-slate-800 rounded-lg">
-                <label class="text-[10px] font-black text-slate-400 uppercase">بدءاً من تاريخ:</label>
-                <input type="date" id="binance_start_date" class="bg-slate-800 border-none text-white text-[10px] px-3 py-1.5 rounded focus:ring-1 ring-yellow-500" onchange="fetchBinanceOrders()">
+            <div class="grid grid-cols-2 gap-2 mb-4 p-3 bg-slate-900/60 border border-slate-800 rounded-lg text-right">
+                <div>
+                    <label class="block text-[8px] font-black text-slate-500 uppercase mb-1">من تاريخ:</label>
+                    <input type="date" id="binance_start_date" class="w-full bg-slate-800 border-none text-white text-[10px] px-3 py-1.5 rounded focus:ring-1 ring-yellow-500" onchange="fetchBinanceOrders()">
+                </div>
+                <div>
+                    <label class="block text-[8px] font-black text-slate-500 uppercase mb-1">إلى تاريخ:</label>
+                    <input type="date" id="binance_end_date" class="w-full bg-slate-800 border-none text-white text-[10px] px-3 py-1.5 rounded focus:ring-1 ring-yellow-500" onchange="fetchBinanceOrders()">
+                </div>
             </div>
 
             <div id="binance-orders-container" class="overflow-y-auto flex-grow custom-scrollbar space-y-3 mb-6">
@@ -621,13 +639,25 @@ $transactions = $stmt->fetchAll();
             document.getElementById('binanceModal').classList.add('hidden');
         }
 
+        function showRawJson(data) {
+            document.getElementById('json-display').textContent = JSON.stringify(data, null, 4);
+            document.getElementById('jsonModal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
         function fetchBinanceOrders() {
             const container = document.getElementById('binance-orders-container');
             const startDate = document.getElementById('binance_start_date').value;
+            const endDate = document.getElementById('binance_end_date').value;
+
+            if (startDate && endDate) {
+                const diff = (new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24);
+                if (diff > 30) { alert("تنبيه: الحد الأقصى للنطاق الزمني هو 30 يوماً حسب قوانين بينانس."); return; }
+            }
 
             container.innerHTML = '<div class="text-center py-10 text-slate-500 font-bold italic animate-pulse">جاري الاتصال بـ Binance API...</div>';
 
-            fetch(`fetch_binance_orders.php?start_date=${startDate}`)
+            fetch(`fetch_binance_orders.php?start_date=${startDate}&end_date=${endDate}`)
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
@@ -686,12 +716,15 @@ $transactions = $stmt->fetchAll();
                                     <p class="text-[10px] text-slate-500 italic mb-2">عملية خارج P2P</p>
                                 `}
 
-                                ${isImported ?
-                                    '<span class="mt-2 text-[10px] font-black text-emerald-500 flex items-center gap-1"><i data-lucide="check-circle" class="w-3 h-3"></i> مضافة مسبقاً</span>' :
-                                    isP2P ?
-                                        `<button id="btn-import-${order.orderNumber}" onclick='quickImportOrder(${JSON.stringify(order)})' class="mt-2 bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black px-4 py-2 rounded text-[10px] font-black transition-all border border-yellow-500/20">إضافة سريعة</button>` :
-                                        `<button onclick='manualImportToForm(${JSON.stringify(order)})' class="mt-2 bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white px-4 py-2 rounded text-[10px] font-black transition-all border border-blue-500/20">إدراج للنموذج</button>`
-                                }
+                                <div class="flex items-center gap-2 mt-2">
+                                    <button onclick='showRawJson(${JSON.stringify(order.raw)})' class="bg-slate-800 text-slate-400 p-2 rounded hover:text-white transition-all" title="عرض البيانات الخام JSON"><i data-lucide="code" class="w-3 h-3"></i></button>
+                                    ${isImported ?
+                                        '<span class="text-[10px] font-black text-emerald-500 flex items-center gap-1"><i data-lucide="check-circle" class="w-3 h-3"></i> مضافة</span>' :
+                                        isP2P ?
+                                            `<button id="btn-import-${order.orderNumber}" onclick='quickImportOrder(${JSON.stringify(order)})' class="bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black px-4 py-2 rounded text-[10px] font-black transition-all border border-yellow-500/20">إضافة سريعة</button>` :
+                                            `<button onclick='manualImportToForm(${JSON.stringify(order)})' class="bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white px-4 py-2 rounded text-[10px] font-black transition-all border border-blue-500/20">إدراج للنموذج</button>`
+                                    }
+                                </div>
                             </div>
                         </div>
                     </div>

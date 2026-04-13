@@ -16,7 +16,7 @@ class BinanceP2P {
         return hash_hmac('sha256', $queryString, $this->apiSecret);
     }
 
-    public function getP2POrders($rows = 10, $startTimestamp = null) {
+    public function getP2POrders($rows = 10, $startTimestamp = null, $endTimestamp = null) {
         $endpoint = "/sapi/v1/c2c/orderMatch/listUserOrderHistory";
         $timestamp = number_format(microtime(true) * 1000, 0, '.', '');
 
@@ -28,6 +28,9 @@ class BinanceP2P {
 
         if ($startTimestamp) {
             $params['startTimestamp'] = $startTimestamp;
+        }
+        if ($endTimestamp) {
+            $params['endTimestamp'] = $endTimestamp;
         }
 
         $queryString = http_build_query($params);
@@ -55,7 +58,7 @@ class BinanceP2P {
         return $data['data'] ?? [];
     }
 
-    public function getPayTransactions($rows = 10, $startTimestamp = null) {
+    public function getPayTransactions($rows = 10, $startTimestamp = null, $endTimestamp = null) {
         $endpoint = "/sapi/v1/pay/transactions";
         $timestamp = number_format(microtime(true) * 1000, 0, '.', '');
 
@@ -66,6 +69,9 @@ class BinanceP2P {
 
         if ($startTimestamp) {
             $params['startTime'] = $startTimestamp;
+        }
+        if ($endTimestamp) {
+            $params['endTime'] = $endTimestamp;
         }
 
         $queryString = http_build_query($params);
@@ -84,7 +90,7 @@ class BinanceP2P {
         return $data['data'] ?? [];
     }
 
-    public function getWithdrawHistory($rows = 10, $startTimestamp = null) {
+    public function getWithdrawHistory($rows = 10, $startTimestamp = null, $endTimestamp = null) {
         $endpoint = "/sapi/v1/capital/withdraw/history";
         $timestamp = number_format(microtime(true) * 1000, 0, '.', '');
 
@@ -96,6 +102,9 @@ class BinanceP2P {
 
         if ($startTimestamp) {
             $params['startTime'] = $startTimestamp;
+        }
+        if ($endTimestamp) {
+            $params['endTime'] = $endTimestamp;
         }
 
         $queryString = http_build_query($params);
@@ -114,7 +123,7 @@ class BinanceP2P {
         return $data ?? [];
     }
 
-    public function getDepositHistory($rows = 10, $startTimestamp = null) {
+    public function getDepositHistory($rows = 10, $startTimestamp = null, $endTimestamp = null) {
         $endpoint = "/sapi/v1/capital/deposit/hisrec";
         $timestamp = number_format(microtime(true) * 1000, 0, '.', '');
 
@@ -126,6 +135,9 @@ class BinanceP2P {
 
         if ($startTimestamp) {
             $params['startTime'] = $startTimestamp;
+        }
+        if ($endTimestamp) {
+            $params['endTime'] = $endTimestamp;
         }
 
         $queryString = http_build_query($params);

@@ -35,15 +35,20 @@ try {
     $binance = new BinanceP2P($settings['binance_api_key'], $decrypted_secret);
 
     $startTimestamp = null;
+    $endTimestamp = null;
+
     if (!empty($_GET['start_date'])) {
         $startTimestamp = strtotime($_GET['start_date'] . ' 00:00:00') * 1000;
     }
+    if (!empty($_GET['end_date'])) {
+        $endTimestamp = strtotime($_GET['end_date'] . ' 23:59:59') * 1000;
+    }
 
     $fetch_limit = $settings['binance_fetch_limit'] ?: 10;
-    $orders = $binance->getP2POrders($fetch_limit, $startTimestamp);
-    $pay_txs = $binance->getPayTransactions($fetch_limit, $startTimestamp);
-    $withdrawals = $binance->getWithdrawHistory($fetch_limit, $startTimestamp);
-    $deposits = $binance->getDepositHistory($fetch_limit, $startTimestamp);
+    $orders = $binance->getP2POrders($fetch_limit, $startTimestamp, $endTimestamp);
+    $pay_txs = $binance->getPayTransactions($fetch_limit, $startTimestamp, $endTimestamp);
+    $withdrawals = $binance->getWithdrawHistory($fetch_limit, $startTimestamp, $endTimestamp);
+    $deposits = $binance->getDepositHistory($fetch_limit, $startTimestamp, $endTimestamp);
 
     // جلب أرقام العمليات المضافة مسبقاً
     $imported_stmt = $pdo->prepare("SELECT binance_order_id FROM transactions WHERE user_id = ? AND binance_order_id IS NOT NULL");
@@ -70,7 +75,8 @@ try {
             'createTime' => date('Y-m-d H:i:s', $order['createTime'] / 1000),
             'asset' => $order['asset'],
             'status' => $order['status'],
-            'is_imported' => in_array($order['orderNumber'], $imported_ids)
+            'is_imported' => in_array($order['orderNumber'], $imported_ids),
+            'raw' => $order
         ];
     }
 
@@ -90,7 +96,8 @@ try {
                 'asset' => 'USDT',
                 'status' => 'COMPLETED',
                 'note' => $tx['productName'] ?? $type,
-                'is_imported' => in_array($tx['orderId'], $imported_ids)
+                'is_imported' => in_array($tx['orderId'], $imported_ids),
+                'raw' => $tx
             ];
         }
     }
@@ -111,7 +118,8 @@ try {
                 'createTime' => date('Y-m-d H:i:s', $dp['insertTime'] / 1000),
                 'asset' => 'USDT',
                 'status' => ($dp['status'] == 1) ? 'COMPLETED' : 'PENDING',
-                'is_imported' => in_array($dp['txId'] ?: $dp['id'], $imported_ids)
+                'is_imported' => in_array($dp['txId'] ?: $dp['id'], $imported_ids),
+                'raw' => $dp
             ];
         }
     }
@@ -131,7 +139,8 @@ try {
                 'createTime' => date('Y-m-d H:i:s', strtotime($wd['applyTime'])),
                 'asset' => 'USDT',
                 'status' => ($wd['status'] == 6) ? 'COMPLETED' : 'PENDING',
-                'is_imported' => in_array($wd['id'], $imported_ids)
+                'is_imported' => in_array($wd['id'], $imported_ids),
+                'raw' => $wd
             ];
         }
     }
