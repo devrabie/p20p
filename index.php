@@ -6,6 +6,7 @@
 
 session_start();
 require_once 'db.php'; 
+require_once 'fifo_helper.php';
 
 // 1. ضبط التوقيت لليمن (GMT+3) لضمان دقة العمليات الحالية واليومية
 // (مضبوط الآن في db.php)
@@ -32,15 +33,9 @@ $api_key = $settings['binance_api_key'] ?? '';
 $api_secret = $settings['binance_api_secret'] ?? '';
 $fetch_limit = $settings['binance_fetch_limit'] ?? 10;
 
-// حساب متوسط الشراء (WAC) بدقة Float - أساس حساب الربح الحقيقي
-$buy_stats_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid) as total_spent, SUM(crypto_amount) as total_bought FROM transactions WHERE user_id = ? AND type='buy'");
-$buy_stats_stmt->execute([$user_id]);
-$buy_stats = $buy_stats_stmt->fetch();
-$avg_buy_price = ($buy_stats['total_bought'] > 0) ? ($buy_stats['total_spent'] / $buy_stats['total_bought']) : 0;
-
-// أ. حساب الأرباح التراكمية (YER / USD) بدقة متناهية تشمل تكلفة الرسوم
-$profit_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid - (? * total_crypto_deducted)) as net_profit FROM transactions WHERE user_id = ? AND type='sell'");
-$profit_stmt->execute([$avg_buy_price, $user_id]);
+// أ. حساب الأرباح التراكمية (YER / USD) بناءً على FIFO
+$profit_stmt = $pdo->prepare("SELECT SUM(fifo_profit) as net_profit FROM transactions WHERE user_id = ? AND type='sell'");
+$profit_stmt->execute([$user_id]);
 $total_profit_yer_all = $profit_stmt->fetchColumn() ?: 0;
 $total_profit_usd_all = ($def_buy > 0) ? ($total_profit_yer_all / $def_buy) : 0;
 
@@ -94,9 +89,9 @@ $total_out->execute([$user_id]);
 $sum_out = $total_out->fetchColumn() ?: 0;
 $remaining_stock = $sum_in - $sum_out;
 
-// هـ. حسابات النطاق المختار (أرباح ورسوم) بدقة
-$daily_profit_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid - (? * total_crypto_deducted)) FROM transactions WHERE user_id = ? AND type = 'sell' AND $date_condition");
-$daily_profit_stmt->execute(array_merge([$avg_buy_price, $user_id], $date_params));
+// هـ. حسابات النطاق المختار (أرباح ورسوم) بدقة بناءً على FIFO
+$daily_profit_stmt = $pdo->prepare("SELECT SUM(fifo_profit) FROM transactions WHERE user_id = ? AND type = 'sell' AND $date_condition");
+$daily_profit_stmt->execute(array_merge([$user_id], $date_params));
 $daily_profit_yer_val = $daily_profit_stmt->fetchColumn() ?: 0;
 $daily_profit_usd_val = ($def_buy > 0) ? ($daily_profit_yer_val / $def_buy) : 0;
 
@@ -112,8 +107,8 @@ $cumulative_profit = 0;
 
 if ($range === 'day') {
     // وضع اليوم: عمليات البيع لهذا اليوم مرتبة زمنياً (بحد أقصى 50 عملية)
-    $stmt = $pdo->prepare("SELECT created_at, (total_fiat_paid - (? * total_crypto_deducted)) as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) = ? ORDER BY id ASC LIMIT 50");
-    $stmt->execute([$avg_buy_price, $user_id, $today]);
+    $stmt = $pdo->prepare("SELECT created_at, fifo_profit as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) = ? ORDER BY id ASC LIMIT 50");
+    $stmt->execute([$user_id, $today]);
     $data_rows = $stmt->fetchAll();
     
     foreach ($data_rows as $data) {
@@ -123,8 +118,8 @@ if ($range === 'day') {
     }
 } else if ($range === 'pulse') {
     // وضع النبض: آخر 30 عملية بيع فردية مرتبة زمنياً (بغض النظر عن اليوم)
-    $stmt = $pdo->prepare("SELECT created_at, (total_fiat_paid - (? * total_crypto_deducted)) as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' ORDER BY id DESC LIMIT 30");
-    $stmt->execute([$avg_buy_price, $user_id]);
+    $stmt = $pdo->prepare("SELECT created_at, fifo_profit as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' ORDER BY id DESC LIMIT 30");
+    $stmt->execute([$user_id]);
     $data_rows = array_reverse($stmt->fetchAll());
 
     foreach ($data_rows as $data) {
@@ -135,8 +130,8 @@ if ($range === 'day') {
 } else if ($range === 'yesterday') {
     // وضع الأمس: عمليات البيع للأمس مرتبة زمنياً
     $yesterday = date('Y-m-d', strtotime('-1 day'));
-    $stmt = $pdo->prepare("SELECT created_at, (total_fiat_paid - (? * total_crypto_deducted)) as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) = ? ORDER BY id ASC LIMIT 50");
-    $stmt->execute([$avg_buy_price, $user_id, $yesterday]);
+    $stmt = $pdo->prepare("SELECT created_at, fifo_profit as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) = ? ORDER BY id ASC LIMIT 50");
+    $stmt->execute([$user_id, $yesterday]);
     $data_rows = $stmt->fetchAll();
 
     foreach ($data_rows as $data) {
@@ -154,8 +149,8 @@ if ($range === 'day') {
         $current_d = date('Y-m-d', strtotime("-$i days"));
         $chart_labels[] = date('m-d', strtotime($current_d));
         
-        $day_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid - (? * total_crypto_deducted)) FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) = ?");
-        $day_stmt->execute([$avg_buy_price, $user_id, $current_d]);
+        $day_stmt = $pdo->prepare("SELECT SUM(fifo_profit) FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) = ?");
+        $day_stmt->execute([$user_id, $current_d]);
         $day_val = (float)($day_stmt->fetchColumn() ?: 0);
         
         $cumulative_profit += $day_val;
@@ -252,10 +247,13 @@ $transactions = $stmt->fetchAll();
         </header>
 
         <!-- الشريط الذكي (Smart Banner) -->
-        <?php if($remaining_stock > 0):
-            $break_even_price = $avg_buy_price * 1.001;
-            $recommended_price = $avg_buy_price * 1.007; // ربح متوسط 0.7%
-            $best_price = $avg_buy_price * 1.012; // ربح ممتاز 1.2%
+        <?php
+        $next_layer = getNextFIFOLayer($pdo, $user_id);
+        if($next_layer):
+            $layer_cost = $next_layer['unit_cost'];
+            $break_even_price = $layer_cost * 1.001;
+            $recommended_price = $layer_cost * 1.007; // ربح متوسط 0.7%
+            $best_price = $layer_cost * 1.012; // ربح ممتاز 1.2%
         ?>
         <div class="glass-card p-4 mb-6 border-l-4 border-blue-500 bg-blue-500/5">
             <div class="flex items-start justify-between gap-4">
@@ -294,21 +292,21 @@ $transactions = $stmt->fetchAll();
                     <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800">
                         <p class="text-[10px] text-slate-500 font-bold uppercase mb-1">بالسعر الافتراضي للإعدادات (<?php echo number_format($def_sell, 2); ?>)</p>
                         <div class="flex justify-between items-center">
-                            <span class="text-sm font-black <?php echo ($def_sell > $break_even_price) ? 'text-emerald-500' : 'text-rose-500'; ?> tabular-nums"><?php echo number_format(($remaining_stock * $def_sell) - ($avg_buy_price * ($remaining_stock * 1.001))); ?> YER</span>
+                            <span class="text-sm font-black <?php echo ($def_sell > $break_even_price) ? 'text-emerald-500' : 'text-rose-500'; ?> tabular-nums"><?php echo number_format(($remaining_stock * $def_sell) - ($layer_cost * ($remaining_stock * 1.001))); ?> YER</span>
                             <span class="text-[10px] text-slate-500">صافي الربح</span>
                         </div>
                     </div>
                     <div class="bg-emerald-500/5 p-4 rounded-xl border border-emerald-500/20">
                         <p class="text-[10px] text-emerald-500 font-bold uppercase mb-1 tracking-widest">بسعر التوصية (<?php echo number_format($recommended_price, 2); ?>)</p>
                         <div class="flex justify-between items-center">
-                            <span class="text-sm font-black text-emerald-400 tabular-nums"><?php echo number_format(($remaining_stock * $recommended_price) - ($avg_buy_price * ($remaining_stock * 1.001))); ?> YER</span>
+                            <span class="text-sm font-black text-emerald-400 tabular-nums"><?php echo number_format(($remaining_stock * $recommended_price) - ($layer_cost * ($remaining_stock * 1.001))); ?> YER</span>
                             <span class="text-[10px] text-emerald-600 font-bold">ربح متوسط (0.7%)</span>
                         </div>
                     </div>
                     <div class="bg-yellow-500/5 p-4 rounded-xl border border-yellow-500/20">
                         <p class="text-[10px] text-yellow-500 font-bold uppercase mb-1 tracking-widest">بأفضل سعر بيع (<?php echo number_format($best_price, 2); ?>)</p>
                         <div class="flex justify-between items-center">
-                            <span class="text-sm font-black text-yellow-400 tabular-nums"><?php echo number_format(($remaining_stock * $best_price) - ($avg_buy_price * ($remaining_stock * 1.001))); ?> YER</span>
+                            <span class="text-sm font-black text-yellow-400 tabular-nums"><?php echo number_format(($remaining_stock * $best_price) - ($layer_cost * ($remaining_stock * 1.001))); ?> YER</span>
                             <span class="text-[10px] text-yellow-600 font-bold">ربح ممتاز (1.2%)</span>
                         </div>
                     </div>
@@ -324,7 +322,7 @@ $transactions = $stmt->fetchAll();
             <div class="glass-card p-5 border-r-4 border-yellow-500 shadow-xl">
                 <span class="text-slate-400 text-[10px] font-bold block mb-1 uppercase italic tracking-tighter">المخزون المتوفر (Stock)</span>
                 <h3 class="text-lg md:text-xl font-black text-yellow-500 tabular-nums"><?php echo number_format($remaining_stock, 2); ?></h3>
-                <p class="text-[9px] text-slate-500 font-bold mt-1">متوسط الشراء: <?php echo number_format($avg_buy_price, 1); ?></p>
+                <p class="text-[9px] text-slate-500 font-bold mt-1">تكلفة الطبقة الحالية: <?php echo number_format($layer_cost ?? 0, 1); ?></p>
             </div>
             <div class="glass-card p-5 bg-blue-500/10 border border-blue-500/20">
                 <span class="text-[9px] text-blue-500 font-black uppercase mb-1 block">ربح اليوم</span>
@@ -352,9 +350,9 @@ $transactions = $stmt->fetchAll();
 
                 <!-- بطاقة متوسط الشراء (ثابتة) -->
                 <div class="glass-card p-4 border-r-4 border-purple-500 bg-slate-900/40">
-                    <span class="text-slate-400 text-[9px] font-bold block mb-1 uppercase italic">متوسط الشراء (WAC)</span>
-                    <h3 class="text-sm font-black text-purple-400 tabular-nums"><?php echo number_format($avg_buy_price, 2); ?></h3>
-                    <p class="text-[10px] text-slate-500 italic">YER لكل 1 USDT</p>
+                    <span class="text-slate-400 text-[9px] font-bold block mb-1 uppercase italic">تكلفة الطبقة الحالية</span>
+                    <h3 class="text-sm font-black text-purple-400 tabular-nums"><?php echo number_format($layer_cost ?? 0, 2); ?></h3>
+                    <p class="text-[10px] text-slate-500 italic">بناءً على نظام FIFO</p>
                 </div>
 
                 <!-- بطاقة ربح الفترة (متغيرة) -->
@@ -433,13 +431,13 @@ $transactions = $stmt->fetchAll();
                     <div>
                         <p class="text-xs text-slate-400 font-bold mb-2">المعادلة المستخدمة:</p>
                         <div class="bg-black/30 p-4 rounded-lg font-mono text-[11px] text-emerald-500 text-left dir-ltr">
-                            Profit = (Qty * SellPrice) - (WAC * (Qty + BinanceFee))
+                            Profit = SellFiat - matched_FIFO_BuyCost
                         </div>
                     </div>
                     <ul class="text-[11px] text-slate-500 space-y-2">
-                        <li class="flex items-start gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 mt-0.5"></i> يتم ضرب كمية البيع في سعر البيع للحصول على العائد الإجمالي.</li>
-                        <li class="flex items-start gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 mt-0.5"></i> يتم خصم التكلفة الحقيقية (كمية البيع + الرسوم) مضروبة في متوسط سعر الشراء العام (WAC).</li>
-                        <li class="flex items-start gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 mt-0.5"></i> متوسط سعر الشراء (WAC) يتغير تلقائياً مع كل عملية شراء جديدة تقوم بها.</li>
+                        <li class="flex items-start gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 mt-0.5"></i> يتم حساب الربح بمطابقة كمية البيع مع أقدم كميات شراء متوفرة (First-In, First-Out).</li>
+                        <li class="flex items-start gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 mt-0.5"></i> التكلفة تشمل سعر الشراء + رسوم بينانس + أي رسوم صراف إضافية.</li>
+                        <li class="flex items-start gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 mt-0.5"></i> هذا النظام يضمن دقة الأرباح حتى عند تقلب الأسعار بشكل كبير.</li>
                     </ul>
                 </div>
             </div>

@@ -6,6 +6,7 @@
 
 session_start();
 require_once 'db.php';
+require_once 'fifo_helper.php';
 
 // 1. ضبط توقيت السيرفر لليمن (GMT+3) (مضبوط في db.php)
 
@@ -49,13 +50,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['amount'])) {
     $binance_fee = 0;
 
     if ($type == 'sell') {
-        // حالة البيع: التأثير على المخزون هو الكمية المباعة فقط لضمان مطابقة محفظة بينانس
+        // حالة البيع
         if (isset($_POST['binance_fee']) && $_POST['binance_fee'] !== '') {
             $binance_fee = floatval($_POST['binance_fee']);
         } else {
             $binance_fee = $crypto_amount * 0.001;
         }
-        $total_crypto_impact = $crypto_amount; // تم التعديل: لا نخصم الرسوم من المخزون لأن بينانس لا تفعل ذلك
+
+        // في البيع، الكمية التي تخرج من المخزون هي الكمية المباعة + الرسوم (لأن الرسوم تُخصم من الرصيد)
+        $total_crypto_impact = $crypto_amount + $binance_fee;
+
+        // التحقق من المخزون قبل التنفيذ
+        $current_stock = getFIFOStock($pdo, $user_id);
+        if ($total_crypto_impact > ($current_stock + 0.0001)) {
+            echo json_encode(['status' => 'error', 'message' => 'عذراً، المخزون غير كافٍ! المتوفر: ' . $current_stock . ' USDT']);
+            exit();
+        }
+
         $total_fiat_paid = $crypto_amount * $price_per_unit;
         $manual_fee_final = 0;
     } else {
@@ -97,6 +108,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['amount'])) {
             $update_sql = "UPDATE settings SET default_sell_price = ? WHERE user_id = ?";
         }
         $pdo->prepare($update_sql)->execute([$price_per_unit, $user_id]);
+
+        // ج. إعادة حساب FIFO
+        recalculateFIFO($pdo, $user_id);
 
         $pdo->commit();
 
