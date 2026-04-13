@@ -452,6 +452,7 @@ $transactions = $stmt->fetchAll();
                 <div class="glass-card p-6 md:p-8 border-b-4 border-b-yellow-500 shadow-2xl max-w-4xl mx-auto">
                     <h2 class="text-lg font-bold mb-8 text-yellow-500 italic flex items-center gap-3"><i data-lucide="zap"></i> تسجيل عملية جديدة</h2>
                     <form id="ajax-form" class="space-y-5">
+                        <input type="hidden" name="binance_order_id" id="form_binance_order_id">
                         <div class="flex items-center gap-2 mb-4 p-3 bg-blue-500/5 border border-blue-500/20"><input type="checkbox" id="enable_backdate" class="w-4 h-4 accent-yellow-500 cursor-pointer" onchange="toggleDateInput()"><label for="enable_backdate" class="text-xs text-blue-400 font-bold cursor-pointer italic select-none">تأريخ يدوي؟</label></div>
                         <div id="date_container" style="display: none;" class="mb-4 animate-pulse"><input type="datetime-local" name="transaction_date" id="manual_date" class="input-dark text-yellow-500 border-yellow-500/30 font-bold"></div>
                         <div id="live_clock_display" class="bg-slate-900/40 p-3 border border-slate-700 flex justify-between items-center mb-4"><span class="text-[10px] text-slate-500 font-bold italic uppercase">توقيت اليمن</span><span id="clock" class="text-sm font-black text-yellow-500 tabular-nums">--:--:--</span></div>
@@ -584,29 +585,29 @@ $transactions = $stmt->fetchAll();
 
     <!-- نافذة جلب عمليات بينانس -->
     <div id="binanceModal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center p-2 md:p-4 z-[999]">
-        <div class="glass-card w-full max-w-4xl p-4 md:p-8 border-2 border-yellow-500/30 shadow-2xl text-right flex flex-col max-h-[95vh]">
-            <div class="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
-                <h2 class="text-lg font-black text-yellow-500 flex items-center gap-3 italic uppercase tracking-widest"><i data-lucide="refresh-cw"></i> عمليات P2P الأخيرة</h2>
-                <button onclick="closeBinanceModal()" class="bg-slate-800 p-2 rounded-lg text-white hover:bg-rose-500 transition"><i data-lucide="x" class="w-4 h-4"></i></button>
+        <div class="glass-card w-full max-w-2xl p-4 md:p-5 border-2 border-yellow-500/30 shadow-2xl text-right flex flex-col max-h-[85vh]">
+            <div class="flex justify-between items-center mb-3 pb-2 border-b border-slate-800">
+                <h2 class="text-sm font-black text-yellow-500 flex items-center gap-2 italic uppercase tracking-widest"><i data-lucide="refresh-cw" class="w-4 h-4"></i> جلب عمليات بينانس</h2>
+                <button onclick="closeBinanceModal()" class="bg-slate-800 p-1.5 rounded-lg text-white hover:bg-rose-500 transition"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
             </div>
 
-            <div class="grid grid-cols-2 gap-2 mb-4 p-3 bg-slate-900/60 border border-slate-800 rounded-lg text-right">
+            <div class="grid grid-cols-2 gap-2 mb-3 p-2 bg-slate-900/60 border border-slate-800 rounded-lg text-right">
                 <div>
-                    <label class="block text-[8px] font-black text-slate-500 uppercase mb-1">من تاريخ:</label>
-                    <input type="date" id="binance_start_date" class="w-full bg-slate-800 border-none text-white text-[10px] px-3 py-1.5 rounded focus:ring-1 ring-yellow-500" onchange="fetchBinanceOrders()">
+                    <label class="block text-[7px] font-black text-slate-500 uppercase mb-0.5">من تاريخ:</label>
+                    <input type="date" id="binance_start_date" class="w-full bg-slate-800 border-none text-white text-[9px] px-2 py-1 rounded focus:ring-1 ring-yellow-500" onchange="fetchBinanceOrders()">
                 </div>
                 <div>
-                    <label class="block text-[8px] font-black text-slate-500 uppercase mb-1">إلى تاريخ:</label>
-                    <input type="date" id="binance_end_date" class="w-full bg-slate-800 border-none text-white text-[10px] px-3 py-1.5 rounded focus:ring-1 ring-yellow-500" onchange="fetchBinanceOrders()">
+                    <label class="block text-[7px] font-black text-slate-500 uppercase mb-0.5">إلى تاريخ:</label>
+                    <input type="date" id="binance_end_date" class="w-full bg-slate-800 border-none text-white text-[9px] px-2 py-1 rounded focus:ring-1 ring-yellow-500" onchange="fetchBinanceOrders()">
                 </div>
             </div>
 
-            <div id="binance-orders-container" class="overflow-y-auto flex-grow custom-scrollbar space-y-3 mb-6">
+            <div id="binance-orders-container" class="overflow-y-auto flex-grow custom-scrollbar space-y-2 mb-3 px-1">
                 <!-- العمليات ستظهر هنا -->
                 <div class="text-center py-10 text-slate-500 font-bold italic">جاري تحميل العمليات...</div>
             </div>
 
-            <div class="flex gap-4"><button onclick="fetchBinanceOrders()" class="flex-1 bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black py-3 rounded-lg font-black uppercase italic transition-all border border-yellow-500/20">تحديث القائمة</button><button onclick="closeBinanceModal()" class="flex-1 bg-slate-800 py-3 text-xs font-black text-white uppercase italic rounded-lg">إغلاق</button></div>
+            <div class="flex gap-3 pt-3 border-t border-slate-800"><button onclick="fetchBinanceOrders()" class="flex-1 bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black py-2 rounded-lg font-black text-[10px] uppercase italic transition-all border border-yellow-500/20 shadow-lg shadow-yellow-500/5">تحديث القائمة</button><button onclick="closeBinanceModal()" class="flex-1 bg-slate-800 py-2 text-[10px] font-black text-white uppercase italic rounded-lg">إغلاق</button></div>
         </div>
     </div>
 
@@ -681,7 +682,7 @@ $transactions = $stmt->fetchAll();
             orders.forEach(order => {
                 const isBuy = order.side === 'BUY';
                 const isCompleted = order.status === 'COMPLETED';
-                const isCancelled = order.status === 'CANCELLED' || order.status === 'FAILED';
+                const isCancelled = order.status === 'CANCELLED' || order.status === 'FAILED' || order.status === 'CANCELLED_BY_SYSTEM' || order.status === 'SYSTEM_CANCELLED';
 
                 const typeLabel = isBuy ? 'شراء' : 'بيع';
                 const typeBg = isBuy ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400';
@@ -702,61 +703,60 @@ $transactions = $stmt->fetchAll();
                 if(order.source === 'DEPOSIT') sourceBadge = '<span class="bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest">DEPOSIT</span>';
 
                 const card = `
-                    <div class="relative glass-card p-5 hover:bg-slate-800/60 transition-all border-r-4 ${borderClass} group ${isImported || isCancelled ? 'opacity-60' : ''} overflow-hidden">
+                    <div class="relative glass-card p-4 hover:bg-slate-800/40 transition-all border-r-4 ${borderClass} group ${isImported || isCancelled ? 'opacity-60' : ''} overflow-hidden">
 
                         <!-- زر JSON في الركن العلوي الأيسر (LTR context for the icon) -->
                         <div class="absolute top-0 left-0">
-                            <button onclick='showRawJson(${JSON.stringify(order.raw)})' class="p-2.5 text-slate-600 hover:text-blue-400 hover:bg-blue-500/10 transition-all rounded-br-xl" title="بيانات JSON">
-                                <i data-lucide="code" class="w-3.5 h-3.5"></i>
+                            <button onclick='showRawJson(${JSON.stringify(order.raw)})' class="p-2 text-slate-700 hover:text-blue-400 hover:bg-blue-500/10 transition-all rounded-br-lg" title="بيانات JSON">
+                                <i data-lucide="code" class="w-3 h-3"></i>
                             </button>
                         </div>
 
-                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
 
-                            <!-- القسم الأيمن: معلومات العملية الأساسية -->
-                            <div class="flex flex-col gap-3 flex-grow">
+                            <!-- القسم الأيمن: دمج البيانات في كتلة واحدة -->
+                            <div class="flex flex-col gap-2 flex-grow">
                                 <div class="flex flex-wrap items-center gap-2">
-                                    <span class="px-3 py-1 rounded-full text-[9px] font-black uppercase ${typeBg} tracking-widest">${typeLabel}</span>
+                                    <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase ${typeBg} tracking-widest">${typeLabel}</span>
                                     ${sourceBadge} ${statusBadge}
-                                    <span class="text-[9px] font-mono text-slate-500 bg-black/30 px-2 py-0.5 rounded border border-slate-800 tracking-tighter">#${order.orderNumber.toString().substring(0,12)}...</span>
+                                    <span class="text-[8px] font-mono text-slate-500 bg-black/30 px-2 py-0.5 rounded border border-slate-800 tracking-tighter">#${order.orderNumber.toString().substring(0,10)}...</span>
                                 </div>
-                                <div class="text-right">
-                                    <p class="text-xl md:text-2xl font-black tabular-nums text-white flex items-baseline gap-2">
-                                        ${amount} <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">USDT</span>
-                                    </p>
-                                    <p class="text-[10px] text-slate-500 font-bold flex items-center gap-1 mt-1">
-                                        <i data-lucide="clock" class="w-3 h-3"></i> ${order.createTime}
-                                    </p>
+
+                                <div class="bg-black/20 p-2.5 rounded-lg border border-white/5 space-y-0.5">
+                                    <div class="flex items-center gap-1.5 text-white font-black">
+                                        <span class="text-sm tabular-nums">${amount}</span>
+                                        <span class="text-[8px] opacity-50 uppercase tracking-widest">USDT</span>
+                                    </div>
+
+                                    <div class="flex items-center gap-1.5 text-yellow-500 font-black">
+                                        <span class="text-sm tabular-nums">${isP2P ? parseFloat(order.totalPrice).toLocaleString() : '--'}</span>
+                                        <span class="text-[8px] opacity-50 font-bold">﷼ ${order.fiat}</span>
+                                    </div>
+
+                                    <div class="text-[8px] text-slate-500 font-bold flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                                        <span>سعر الصرف: <span class="text-slate-300 tabular-nums">${isP2P ? parseFloat(order.unitPrice).toFixed(2) : '--'}</span> ﷼</span>
+                                        <span>رسوم: <span class="text-rose-400 tabular-nums">${parseFloat(order.binance_fee).toFixed(4)}</span></span>
+                                    </div>
+
+                                    <div class="text-[8px] text-slate-600 font-bold pt-1 border-t border-white/5 flex items-center gap-1 mt-1">
+                                        <i data-lucide="clock" class="w-2.5 h-2.5"></i> ${order.createTime}
+                                    </div>
                                 </div>
                             </div>
 
-                            <!-- القسم الأيسر: المبالغ والأزرار -->
-                            <div class="flex flex-col items-end gap-3 w-full md:w-auto">
-                                <div class="text-left bg-black/20 p-3 rounded-xl border border-white/5 w-full md:min-w-[180px]">
-                                    ${isP2P ? `
-                                        <p class="text-lg font-black text-yellow-500 tabular-nums flex items-center justify-end gap-2">
-                                            ${parseFloat(order.totalPrice).toLocaleString()}
-                                            <span class="text-[10px] text-slate-400 font-bold">${order.fiat}</span>
-                                        </p>
-                                        <p class="text-[10px] font-bold text-slate-500 italic text-right mt-1">سعر الصرف: ${parseFloat(order.unitPrice).toFixed(2)}</p>
-                                    ` : `
-                                        <p class="text-[10px] text-slate-500 italic text-center py-2 font-bold uppercase tracking-widest">عملية خارج نظام P2P</p>
-                                    `}
-                                </div>
-
-                                <div class="flex items-center gap-3 w-full justify-end">
-                                    ${isImported ?
-                                        '<span class="bg-emerald-500/10 text-emerald-500 px-4 py-2 rounded-xl text-[10px] font-black flex items-center gap-2 border border-emerald-500/20"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i> مضافة مسبقاً</span>' :
-                                        (!isCompleted ? '' : (isP2P ?
-                                            `<button id="btn-import-${order.orderNumber}" onclick='quickImportOrder(${JSON.stringify(order)})' class="flex-grow md:flex-none bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black px-6 py-2.5 rounded-xl text-[10px] font-black transition-all border border-yellow-500/20 flex items-center justify-center gap-2 shadow-lg shadow-yellow-500/5 active:scale-95">
-                                                <i data-lucide="zap" class="w-3.5 h-3.5"></i> إضافة سريعة
-                                            </button>` :
-                                            `<button onclick='manualImportToForm(${JSON.stringify(order)})' class="flex-grow md:flex-none bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white px-6 py-2.5 rounded-xl text-[10px] font-black transition-all border border-blue-500/20 flex items-center justify-center gap-2 active:scale-95">
-                                                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i> إدراج للنموذج
-                                            </button>`
-                                        ))
-                                    }
-                                </div>
+                            <!-- القسم الأيسر: الأزرار -->
+                            <div class="flex items-center gap-2 w-full md:w-auto justify-end">
+                                ${isImported ?
+                                    '<span class="bg-emerald-500/10 text-emerald-500 px-3 py-1.5 rounded-lg text-[9px] font-black flex items-center gap-1.5 border border-emerald-500/20"><i data-lucide="check-circle" class="w-3 h-3"></i> تم الإضافة</span>' :
+                                    (!isCompleted ? '' : (isP2P ?
+                                        `<button id="btn-import-${order.orderNumber}" onclick='quickImportOrder(${JSON.stringify(order)})' class="flex-grow md:flex-none bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black px-4 py-2 rounded-lg text-[9px] font-black transition-all border border-yellow-500/20 flex items-center justify-center gap-1.5 active:scale-95">
+                                            <i data-lucide="zap" class="w-3 h-3"></i> إضافة سريعة
+                                        </button>` :
+                                        `<button onclick='manualImportToForm(${JSON.stringify(order)})' class="flex-grow md:flex-none bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white px-4 py-2 rounded-lg text-[9px] font-black transition-all border border-blue-500/20 flex items-center justify-center gap-1.5 active:scale-95">
+                                            <i data-lucide="edit-3" class="w-3 h-3"></i> إدراج للنموذج
+                                        </button>`
+                                    ))
+                                }
                             </div>
                         </div>
                     </div>
@@ -773,6 +773,9 @@ $transactions = $stmt->fetchAll();
             // ضبط التاريخ
             const dt = order.createTime.replace(" ", "T").substring(0, 16);
             document.getElementById('manual_date').value = dt;
+
+            // حفظ رقم الطلب لمنع التكرار
+            document.getElementById('form_binance_order_id').value = order.orderNumber;
 
             const type = order.side === 'BUY' ? 'buy' : 'sell';
             document.getElementById('typeSelect').value = type;
