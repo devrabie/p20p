@@ -155,5 +155,42 @@ class BinanceP2P {
         $data = json_decode($response, true);
         return $data ?? [];
     }
+
+    public function getUSDTBalance() {
+        $endpoint = "/sapi/v1/asset/getUserAsset";
+        $timestamp = number_format(microtime(true) * 1000, 0, '.', '');
+
+        $params = [
+            'timestamp' => $timestamp,
+            'recvWindow' => 5000,
+            'asset' => 'USDT'
+        ];
+
+        $queryString = http_build_query($params);
+        $signature = $this->generateSignature($queryString);
+        $url = $this->baseUrl . $endpoint;
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $queryString . '&signature=' . $signature);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'X-MBX-APIKEY: ' . $this->apiKey
+        ]);
+
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        $data = json_decode($response, true);
+        if (is_array($data)) {
+            foreach ($data as $asset) {
+                if (isset($asset['asset']) && $asset['asset'] === 'USDT') {
+                    return floatval($asset['free']) + floatval($asset['locked']);
+                }
+            }
+        }
+        return 0;
+    }
 }
 ?>

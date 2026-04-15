@@ -372,6 +372,27 @@ $transactions = $stmt->fetchAll();
                     <p class="text-[10px] text-rose-500/70 font-bold"><?php echo number_format($daily_fees_yer_val); ?> YER</p>
                 </div>
 
+                <!-- بطاقة رصيد بينانس -->
+                <div id="binance_balance_card" class="glass-card p-4 border-r-4 border-yellow-500 bg-yellow-500/5 col-span-2 md:col-span-2 hidden">
+                    <div class="flex justify-between items-start mb-1">
+                        <span class="text-yellow-500 text-[9px] font-black block uppercase">رصيد بينانس المتاح</span>
+                        <div class="animate-pulse bg-yellow-500/20 h-2 w-2 rounded-full" id="balance_loader"></div>
+                    </div>
+                    <div class="flex justify-between items-end">
+                        <div>
+                            <h3 class="text-xl font-black text-yellow-400 tabular-nums" id="binance_usdt_val">0.00</h3>
+                            <p class="text-[10px] text-slate-500">USDT (Spot + Funding)</p>
+                        </div>
+                        <div class="text-left">
+                            <button onclick="fetchBinanceBalance()" class="text-slate-500 hover:text-yellow-500 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- بطاقة شراء الفترة (مدمجة) -->
                 <div class="glass-card p-4 border-l-4 border-blue-500 bg-blue-500/5 col-span-2 md:col-span-2">
                     <span class="text-blue-400 text-[9px] font-black block mb-1 uppercase italic">إجمالي الشراء (<?php echo $range_label; ?>)</span>
@@ -647,6 +668,30 @@ $transactions = $stmt->fetchAll();
             lucide.createIcons();
         }
 
+        function fetchBinanceBalance() {
+            const card = document.getElementById('binance_balance_card');
+            const loader = document.getElementById('balance_loader');
+            const valDisplay = document.getElementById('binance_usdt_val');
+
+            loader.classList.add('animate-spin');
+
+            fetch('fetch_binance_balance.php')
+            .then(res => res.json())
+            .then(data => {
+                loader.classList.remove('animate-spin');
+                if (data.status === 'success') {
+                    card.classList.remove('hidden');
+                    valDisplay.innerText = parseFloat(data.balance).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                } else {
+                    console.error('Binance Balance Error:', data.message);
+                }
+            })
+            .catch(err => {
+                loader.classList.remove('animate-spin');
+                console.error('Fetch error:', err);
+            });
+        }
+
         function fetchBinanceOrders() {
             const container = document.getElementById('binance-orders-container');
             const startDate = document.getElementById('binance_start_date').value;
@@ -906,6 +951,7 @@ $transactions = $stmt->fetchAll();
             renderProfitChart();
             renderTransactions();
             loadMainFormState();
+            fetchBinanceBalance();
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('status') === 'success') { showToast("تم الحفظ بنجاح وتحديث ميزان الأرباح!"); window.history.replaceState({}, document.title, "index.php#form-section"); }
             if (urlParams.get('updated') === '1') { showToast("تم تحديث العملية بنجاح!"); window.history.replaceState({}, document.title, "index.php#form-section"); }
