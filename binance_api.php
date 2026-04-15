@@ -157,40 +157,49 @@ class BinanceP2P {
     }
 
     public function getUSDTBalance() {
-        $endpoint = "/sapi/v1/asset/getUserAsset";
         $timestamp = number_format(microtime(true) * 1000, 0, '.', '');
 
-        $params = [
-            'timestamp' => $timestamp,
-            'recvWindow' => 5000,
-            'asset' => 'USDT'
-        ];
+        // 1. Spot Balance (getUserAsset)
+        $spot_endpoint = "/sapi/v1/asset/getUserAsset";
+        $spot_params = ['timestamp' => $timestamp, 'recvWindow' => 5000, 'asset' => 'USDT'];
+        $spot_qs = http_build_query($spot_params);
+        $spot_sig = $this->generateSignature($spot_qs);
 
-        $queryString = http_build_query($params);
-        $signature = $this->generateSignature($queryString);
-        $url = $this->baseUrl . $endpoint;
-
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
+        $ch = curl_init($this->baseUrl . $spot_endpoint);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $queryString . '&signature=' . $signature);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'X-MBX-APIKEY: ' . $this->apiKey
-        ]);
-
-        $response = curl_exec($ch);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $spot_qs . '&signature=' . $spot_sig);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['X-MBX-APIKEY: ' . $this->apiKey]);
+        $spot_res = json_decode(curl_exec($ch), true);
         curl_close($ch);
 
-        $data = json_decode($response, true);
-        if (is_array($data)) {
-            foreach ($data as $asset) {
-                if (isset($asset['asset']) && $asset['asset'] === 'USDT') {
-                    return floatval($asset['free']) + floatval($asset['locked']);
-                }
-            }
+        // 2. Funding Balance (get-funding-asset)
+        $funding_endpoint = "/sapi/v1/asset/get-funding-asset";
+        $funding_params = ['timestamp' => $timestamp, 'recvWindow' => 5000, 'asset' => 'USDT'];
+        $funding_qs = http_build_query($funding_params);
+        $funding_sig = $this->generateSignature($funding_qs);
+
+        $ch = curl_init($this->baseUrl . $funding_endpoint);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $funding_qs . '&signature=' . $funding_sig);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['X-MBX-APIKEY: ' . $this->apiKey]);
+        $funding_res = json_decode(curl_exec($ch), true);
+        curl_close($ch);
+
+        $total = 0;
+        if (is_array($spot_res)) {
+            foreach ($spot_res as $a) if (($a['asset'] ?? '') === 'USDT') $total += floatval($a['free']) + floatval($a['locked']);
         }
-        return 0;
+        if (is_array($funding_res)) {
+            foreach ($funding_res as $a) if (($a['asset'] ?? '') === 'USDT') $total += floatval($a['free']) + floatval($a['freeze']) + floatval($a['withdrawing']);
+        }
+
+        return [
+            'total' => $total,
+            'spot' => $spot_res,
+            'funding' => $funding_res
+        ];
     }
 }
 ?>

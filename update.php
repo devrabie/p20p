@@ -17,6 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $binance_fee = floatval($_POST['binance_fee']);
     $manual_fee = floatval($_POST['manual_fee']);
     $transaction_date = $_POST['transaction_date'];
+    $binance_order_id = !empty($_POST['binance_order_id']) ? $_POST['binance_order_id'] : null;
 
     $stmt = $pdo->prepare("SELECT id FROM transactions WHERE id = ? AND user_id = ?");
     $stmt->execute([$id, $user_id]);
@@ -62,11 +63,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             manual_fee = ?,
             total_fiat_paid = ?, 
             total_crypto_deducted = ?,
-            created_at = ? 
+            created_at = ?,
+            binance_order_id = ?
             WHERE id = ? AND user_id = ?";
     
     $pdo->prepare($sql)->execute([
-        $type, $amount, $price, $binance_fee, $manual_fee_final, $total_fiat, $total_crypto_impact, $transaction_date, $id, $user_id
+        $type, $amount, $price, $binance_fee, $manual_fee_final, $total_fiat, $total_crypto_impact, $transaction_date, $binance_order_id, $id, $user_id
     ]);
 
     // إعادة حساب FIFO بعد التعديل

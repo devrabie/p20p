@@ -384,11 +384,18 @@ $transactions = $stmt->fetchAll();
                             <p class="text-[10px] text-slate-500">USDT (Spot + Funding)</p>
                         </div>
                         <div class="text-left">
-                            <button onclick="fetchBinanceBalance()" class="text-slate-500 hover:text-yellow-500 transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                            </button>
+                            <div class="flex gap-2">
+                                <button onclick="showBalanceJson()" class="text-slate-600 hover:text-yellow-500 transition-colors" title="Show JSON">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                                    </svg>
+                                </button>
+                                <button onclick="fetchBinanceBalance()" class="text-slate-500 hover:text-yellow-500 transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -668,6 +675,7 @@ $transactions = $stmt->fetchAll();
             lucide.createIcons();
         }
 
+        let lastBalanceData = null;
         function fetchBinanceBalance() {
             const card = document.getElementById('binance_balance_card');
             const loader = document.getElementById('balance_loader');
@@ -681,6 +689,7 @@ $transactions = $stmt->fetchAll();
                 loader.classList.remove('animate-spin');
                 if (data.status === 'success') {
                     card.classList.remove('hidden');
+                    lastBalanceData = data.raw;
                     valDisplay.innerText = parseFloat(data.balance).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
                 } else {
                     console.error('Binance Balance Error:', data.message);
@@ -690,6 +699,13 @@ $transactions = $stmt->fetchAll();
                 loader.classList.remove('animate-spin');
                 console.error('Fetch error:', err);
             });
+        }
+
+        function showBalanceJson() {
+            if (!lastBalanceData) return;
+            document.getElementById('json_order_id').innerText = "Binance Wallet Balance";
+            document.getElementById('json_content').textContent = JSON.stringify(lastBalanceData, null, 4);
+            document.getElementById('jsonModal').classList.remove('hidden');
         }
 
         function fetchBinanceOrders() {

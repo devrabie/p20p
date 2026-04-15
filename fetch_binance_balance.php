@@ -33,9 +33,9 @@ if (!$decrypted_secret) {
 
 try {
     $binance = new BinanceP2P($settings['binance_api_key'], $decrypted_secret);
-    $balance = $binance->getUSDTBalance();
+    $data = $binance->getUSDTBalance();
 
-    echo json_encode(['status' => 'success', 'balance' => $balance]);
+    echo json_encode(['status' => 'success', 'balance' => $data['total'], 'raw' => $data]);
 } catch (Exception $e) {
     echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
 }
