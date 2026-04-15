@@ -127,6 +127,12 @@ try {
     foreach ($withdrawals as $wd) {
         if ($wd['coin'] === 'USDT') {
             $status_map = [6 => 'COMPLETED', 1 => 'PENDING', 3 => 'CANCELLED', 5 => 'FAILED'];
+            // تحويل الوقت من UTC إلى توقيت اليمن المحلي
+            $utc_time = $wd['applyTime'];
+            if (strpos($utc_time, ' ') !== false && strpos($utc_time, 'UTC') === false) {
+                $utc_time .= ' UTC';
+            }
+
             $formattedOrders[] = [
                 'source' => 'WITHDRAW',
                 'orderNumber' => $wd['id'],
@@ -136,7 +142,7 @@ try {
                 'totalPrice' => 0,
                 'fiat' => 'USDT',
                 'binance_fee' => $wd['transactionFee'] ?? 0,
-                'createTime' => date('Y-m-d H:i:s', strtotime($wd['applyTime'])),
+                'createTime' => date('Y-m-d H:i:s', strtotime($utc_time)),
                 'asset' => 'USDT',
                 'status' => $status_map[$wd['status']] ?? 'OTHER',
                 'is_imported' => in_array($wd['id'], $imported_ids),
