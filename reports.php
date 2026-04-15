@@ -10,39 +10,33 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = $_SESSION['user_id'];
 
-// 2. جلب متوسط سعر الشراء العام للمستخدم
-$wac_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid) as spent, SUM(crypto_amount) as bought FROM transactions WHERE user_id = ? AND type='buy'");
-$wac_stmt->execute([$user_id]);
-$wac_data = $wac_stmt->fetch();
-$avg_buy_price = ($wac_data['bought'] > 0) ? ($wac_data['spent'] / $wac_data['bought']) : 0;
-
 // 3. جلب سعر الصرف الافتراضي للمستخدم
 $settings_stmt = $pdo->prepare("SELECT default_buy_price FROM settings WHERE user_id = ?");
 $settings_stmt->execute([$user_id]);
 $default_buy_price = $settings_stmt->fetchColumn() ?: 535;
 
-// 4. جلب إحصائيات العمر (Lifetime Analytics)
+// 4. إحصائيات العمر (Lifetime Analytics) بناءً على FIFO
 $lifetime_stmt = $pdo->prepare("
     SELECT
-        SUM(CASE WHEN type='sell' THEN total_fiat_paid - (? * total_crypto_deducted) ELSE 0 END) as total_profit,
+        SUM(CASE WHEN type='sell' THEN fifo_profit ELSE 0 END) as total_profit,
         SUM(crypto_amount) as total_volume,
         COUNT(*) as total_tx
     FROM transactions
     WHERE user_id = ?
 ");
-$lifetime_stmt->execute([$avg_buy_price, $user_id]);
+$lifetime_stmt->execute([$user_id]);
 $lifetime = $lifetime_stmt->fetch();
 
-// 5. إحصائيات مميزة (Best Day & Highest Vol)
+// 5. إحصائيات مميزة (Best Day & Highest Vol) بناءً على FIFO
 $best_day_stmt = $pdo->prepare("
-    SELECT DATE(created_at) as day, SUM(total_fiat_paid - (? * total_crypto_deducted)) as daily_profit
+    SELECT DATE(created_at) as day, SUM(fifo_profit) as daily_profit
     FROM transactions
     WHERE user_id = ? AND type='sell'
     GROUP BY DATE(created_at)
     ORDER BY daily_profit DESC
     LIMIT 1
 ");
-$best_day_stmt->execute([$avg_buy_price, $user_id]);
+$best_day_stmt->execute([$user_id]);
 $best_day = $best_day_stmt->fetch();
 
 $max_vol_stmt = $pdo->prepare("
@@ -72,15 +66,13 @@ if ($end_date) {
     $params[] = $end_date;
 }
 
-array_unshift($params, $avg_buy_price);
-
-// 7. استعلام تجميع البيانات اليومي مع حساب الأرباح بدقة لتجنب N+1
+// 7. استعلام تجميع البيانات اليومي مع حساب الأرباح بدقة لتجنب N+1 بناءً على FIFO
 $sql = "SELECT 
             DATE(created_at) as day, 
             SUM(CASE WHEN type='buy' THEN total_fiat_paid ELSE 0 END) as total_buy_fiat,
             SUM(CASE WHEN type='sell' THEN total_fiat_paid ELSE 0 END) as total_sell_fiat,
             SUM(CASE WHEN type='sell' THEN crypto_amount ELSE 0 END) as total_sell_qty,
-            SUM(CASE WHEN type='sell' THEN total_fiat_paid - (? * total_crypto_deducted) ELSE 0 END) as daily_profit_yer,
+            SUM(CASE WHEN type='sell' THEN fifo_profit ELSE 0 END) as daily_profit_yer,
             COUNT(*) as transactions_count
         FROM transactions 
         $where_clause
@@ -156,9 +148,9 @@ try {
                 <p class="text-[10px] text-purple-400 font-bold"><?php echo number_format($lifetime['total_tx'] ?? 0); ?> عملية</p>
             </div>
             <div class="glass-card p-4 border-r-4 border-slate-500 bg-slate-500/5">
-                <p class="text-[10px] font-black text-slate-400 uppercase mb-1 tracking-widest">متوسط الشراء (WAC)</p>
-                <h3 class="text-lg md:text-xl font-black text-white tabular-nums"><?php echo number_format($avg_buy_price, 2); ?> <span class="text-[10px] opacity-40">YER</span></h3>
-                <p class="text-[10px] text-slate-500 font-bold">حسب إجمالي الوارد</p>
+                <p class="text-[10px] font-black text-slate-400 uppercase mb-1 tracking-widest">نظام الجرد</p>
+                <h3 class="text-lg md:text-xl font-black text-white tabular-nums">FIFO</h3>
+                <p class="text-[10px] text-slate-500 font-bold">First-In, First-Out</p>
             </div>
         </div>
 
