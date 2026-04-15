@@ -82,20 +82,32 @@ try {
     foreach ($pay_txs as $tx) {
         if ($tx['currency'] === 'USDT') {
             $raw_amount = floatval($tx['amount']);
+            $order_id = $tx['transactionId'] ?? $tx['orderId'];
+
+            // تحديد الاتجاه بناءً على معرف المستخدم
+            $side = 'SELL';
+            if (isset($tx['uid']) && isset($tx['receiverInfo']['binanceId'])) {
+                if ($tx['uid'] == $tx['receiverInfo']['binanceId']) {
+                    $side = 'BUY';
+                }
+            } elseif ($raw_amount > 0) {
+                $side = 'BUY';
+            }
+
             $formattedOrders[] = [
                 'source' => 'PAY',
-                'orderNumber' => $tx['orderId'],
-                'side' => ($raw_amount > 0) ? 'BUY' : 'SELL',
+                'orderNumber' => $order_id,
+                'side' => $side,
                 'amount' => abs($raw_amount),
                 'unitPrice' => 0,
                 'totalPrice' => 0,
                 'fiat' => 'USDT',
-                'binance_fee' => 0,
+                'binance_fee' => $tx['totalPaymentFee'] ?? 0,
                 'createTime' => date('Y-m-d H:i:s', $tx['transactionTime'] / 1000),
                 'asset' => 'USDT',
                 'status' => 'COMPLETED',
                 'note' => $tx['note'] ?? ($tx['productName'] ?? ''),
-                'is_imported' => in_array($tx['orderId'], $imported_ids),
+                'is_imported' => in_array($order_id, $imported_ids),
                 'raw' => $tx
             ];
         }
@@ -127,6 +139,12 @@ try {
     foreach ($withdrawals as $wd) {
         if ($wd['coin'] === 'USDT') {
             $status_map = [6 => 'COMPLETED', 1 => 'PENDING', 3 => 'CANCELLED', 5 => 'FAILED'];
+            // تحويل الوقت من UTC إلى توقيت اليمن المحلي
+            $utc_time = $wd['applyTime'];
+            if (strpos($utc_time, ' ') !== false && strpos($utc_time, 'UTC') === false) {
+                $utc_time .= ' UTC';
+            }
+
             $formattedOrders[] = [
                 'source' => 'WITHDRAW',
                 'orderNumber' => $wd['id'],
@@ -136,7 +154,7 @@ try {
                 'totalPrice' => 0,
                 'fiat' => 'USDT',
                 'binance_fee' => $wd['transactionFee'] ?? 0,
-                'createTime' => date('Y-m-d H:i:s', strtotime($wd['applyTime'])),
+                'createTime' => date('Y-m-d H:i:s', strtotime($utc_time)),
                 'asset' => 'USDT',
                 'status' => $status_map[$wd['status']] ?? 'OTHER',
                 'is_imported' => in_array($wd['id'], $imported_ids),
