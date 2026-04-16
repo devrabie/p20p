@@ -858,6 +858,7 @@ $transactions = $stmt->fetchAll();
 
             // لعمليات Pay و Withdraw، السعر غالباً غير معروف، نترك للمستخدم إدخاله
             document.getElementById('priceInput').value = type === 'buy' ? BUY_PRICE_DEF : SELL_PRICE_DEF;
+            document.getElementById('manual_fiat_fee').value = 0;
 
             if (order.binance_fee !== undefined && order.binance_fee !== null) {
                 document.getElementById('binance_fee_input').value = fee;
