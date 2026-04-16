@@ -859,6 +859,8 @@ $transactions = $stmt->fetchAll();
             // لعمليات Pay و Withdraw، السعر غالباً غير معروف، نترك للمستخدم إدخاله
             document.getElementById('priceInput').value = type === 'buy' ? BUY_PRICE_DEF : SELL_PRICE_DEF;
             document.getElementById('manual_fiat_fee').value = 0;
+            document.getElementById('binance_fee_input').dataset.manualModified = 'true';
+            document.getElementById('manual_fiat_fee').dataset.manualModified = 'true';
 
             if (order.binance_fee !== undefined && order.binance_fee !== null) {
                 document.getElementById('binance_fee_input').value = fee;
@@ -1032,7 +1034,7 @@ $transactions = $stmt->fetchAll();
                 if (type === 'buy') {
                     const gross = amount / 0.999;
                     const fee = gross - amount;
-                    feeInput.value = fee.toFixed(2);
+                    if (feeInput.dataset.manualModified !== "true") feeInput.value = fee.toFixed(2);
                     document.getElementById('prev-gross').textContent = gross.toFixed(4);
 
                     const grossYER = gross * price;
@@ -1050,7 +1052,7 @@ $transactions = $stmt->fetchAll();
                     document.getElementById('prev-total-yer').textContent = (grossYER + finalFee).toLocaleString();
                 } else {
                     const fee = amount * 0.001;
-                    feeInput.value = fee.toFixed(2);
+                    if (feeInput.dataset.manualModified !== "true") feeInput.value = fee.toFixed(2);
                     document.getElementById('prev-gross').textContent = (amount + fee).toFixed(4);
                     document.getElementById('prev-total-yer').textContent = (amount * price).toLocaleString();
                     manualFiatInput.value = 0;
@@ -1060,11 +1062,21 @@ $transactions = $stmt->fetchAll();
                 feeInput.value = "0.00";
                 manualFiatInput.value = 0;
                 manualFiatInput.dataset.manualModified = "false";
+            feeInput.dataset.manualModified = "false";
             }
         }
 
-        amountInput.addEventListener('input', updateCalculations);
+        amountInput.addEventListener('input', () => {
+            manualFiatInput.dataset.manualModified = 'false';
+            feeInput.dataset.manualModified = 'false';
+            updateCalculations();
+        });
         priceInput.addEventListener('input', () => { updateCalculations(); saveMainFormState(); });
+        feeInput.addEventListener('input', () => {
+            feeInput.dataset.manualModified = 'true';
+            updateCalculations();
+            saveMainFormState();
+        });
         manualFiatInput.addEventListener('input', () => {
             manualFiatInput.dataset.manualModified = "true";
             updateCalculations();
@@ -1072,6 +1084,7 @@ $transactions = $stmt->fetchAll();
         });
         typeSelect.addEventListener('change', () => {
             manualFiatInput.dataset.manualModified = "false";
+            feeInput.dataset.manualModified = "false";
             handleTypeChange();
             updateCalculations();
             saveMainFormState();
