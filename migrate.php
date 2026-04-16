@@ -18,7 +18,7 @@ try {
     // إضافة عمود لرقم طلب بينانس في جدول العمليات لمنع التكرار
     $tx_columns = $pdo->query("SHOW COLUMNS FROM transactions")->fetchAll(PDO::FETCH_COLUMN);
     if (!in_array('binance_order_id', $tx_columns)) {
-        $pdo->exec("ALTER TABLE transactions ADD COLUMN binance_order_id VARCHAR(50) DEFAULT NULL");
+        $pdo->exec("ALTER TABLE transactions ADD COLUMN binance_order_id VARCHAR(100) DEFAULT NULL");
         $pdo->exec("ALTER TABLE transactions ADD INDEX (binance_order_id)");
     }
 
