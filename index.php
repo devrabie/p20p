@@ -395,6 +395,9 @@ $transactions = $stmt->fetchAll();
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                     </svg>
                                 </button>
+                                <button onclick="matchBalance()" class="text-slate-500 hover:text-yellow-500 transition-colors" title="مطابقة الرصيد">
+                                    <i data-lucide="scale" class="w-4 h-4"></i>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -646,6 +649,8 @@ $transactions = $stmt->fetchAll();
         lucide.createIcons();
         const BUY_PRICE_DEF = <?php echo $def_buy; ?>;
         const SELL_PRICE_DEF = <?php echo $def_sell; ?>;
+        const LEDGER_STOCK = <?php echo (float)$remaining_stock; ?>;
+        let currentBinanceBalance = 0;
 
         function updateClock() { const clock = document.getElementById('clock'); if (clock) { clock.textContent = new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' }); } }
         setInterval(updateClock, 1000); updateClock();
@@ -690,7 +695,8 @@ $transactions = $stmt->fetchAll();
                 if (data.status === 'success') {
                     card.classList.remove('hidden');
                     lastBalanceData = data.raw;
-                    valDisplay.innerText = parseFloat(data.balance).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    currentBinanceBalance = parseFloat(data.balance);
+                    valDisplay.innerText = currentBinanceBalance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
                 } else {
                     console.error('Binance Balance Error:', data.message);
                 }
@@ -706,6 +712,33 @@ $transactions = $stmt->fetchAll();
             document.getElementById('json_order_id').innerText = "Binance Wallet Balance";
             document.getElementById('json_content').textContent = JSON.stringify(lastBalanceData, null, 4);
             document.getElementById('jsonModal').classList.remove('hidden');
+        }
+
+        function matchBalance() {
+            if (currentBinanceBalance > LEDGER_STOCK) {
+                if (confirm("لديك رصيد لم يسجل بالكمية هل تريد اضافتة")) {
+                    closeReportsModal();
+
+                    typeSelect.value = 'buy';
+                    handleTypeChange();
+
+                    const diff = currentBinanceBalance - LEDGER_STOCK;
+                    amountInput.value = diff.toFixed(4);
+
+                    // تصفير الرسوم وحمايتها من التحديث التلقائي
+                    feeInput.value = "0.00";
+                    manualFiatInput.value = 0;
+                    feeInput.dataset.manualModified = 'true';
+                    manualFiatInput.dataset.manualModified = 'true';
+
+                    updateCalculations();
+
+                    document.getElementById('form-section').scrollIntoView({ behavior: 'smooth' });
+                    showToast("تم إدراج الفرق في الكمية، يرجى مراجعة السعر والحفظ");
+                }
+            } else {
+                alert("الرصيد في النظام مطابق أو أكبر من رصيد بينانس");
+            }
         }
 
         function fetchBinanceOrders() {
