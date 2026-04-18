@@ -395,9 +395,6 @@ $transactions = $stmt->fetchAll();
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                     </svg>
                                 </button>
-                                <button onclick="matchBalance()" class="text-slate-500 hover:text-yellow-500 transition-colors" title="مطابقة الرصيد">
-                                    <i data-lucide="scale" class="w-4 h-4"></i>
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -641,7 +638,13 @@ $transactions = $stmt->fetchAll();
                 <div class="text-center py-10 text-slate-500 font-bold italic">جاري تحميل العمليات...</div>
             </div>
 
-            <div class="flex gap-3 pt-3 border-t border-slate-800"><button onclick="fetchBinanceOrders()" class="flex-1 bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black py-2 rounded-lg font-black text-[10px] uppercase italic transition-all border border-yellow-500/20 shadow-lg shadow-yellow-500/5">تحديث القائمة</button><button onclick="closeBinanceModal()" class="flex-1 bg-slate-800 py-2 text-[10px] font-black text-white uppercase italic rounded-lg">إغلاق</button></div>
+            <div class="flex gap-3 pt-3 border-t border-slate-800">
+                <button onclick="fetchBinanceOrders()" class="flex-1 bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black py-2 rounded-lg font-black text-[10px] uppercase italic transition-all border border-yellow-500/20 shadow-lg shadow-yellow-500/5">تحديث القائمة</button>
+                <button onclick="matchBalance()" class="flex-1 bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white py-2 rounded-lg font-black text-[10px] uppercase italic transition-all border border-blue-500/20 flex items-center justify-center gap-2">
+                    <i data-lucide="scale" class="w-3.5 h-3.5"></i> مطابقة الرصيد
+                </button>
+                <button onclick="closeBinanceModal()" class="flex-1 bg-slate-800 py-2 text-[10px] font-black text-white uppercase italic rounded-lg">إغلاق</button>
+            </div>
         </div>
     </div>
 
@@ -651,6 +654,7 @@ $transactions = $stmt->fetchAll();
         const SELL_PRICE_DEF = <?php echo $def_sell; ?>;
         const LEDGER_STOCK = <?php echo (float)$remaining_stock; ?>;
         let currentBinanceBalance = 0;
+        let hasPendingBuyOrders = false;
 
         function updateClock() { const clock = document.getElementById('clock'); if (clock) { clock.textContent = new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' }); } }
         setInterval(updateClock, 1000); updateClock();
@@ -715,9 +719,15 @@ $transactions = $stmt->fetchAll();
         }
 
         function matchBalance() {
+            if (hasPendingBuyOrders) {
+                alert("يوجد عمليات شراء في القائمة لم يتم إضافتها بعد. يرجى إضافتها أولاً لضمان دقة مطابقة الرصيد.");
+                return;
+            }
+
             if (currentBinanceBalance > LEDGER_STOCK) {
                 if (confirm("لديك رصيد لم يسجل بالكمية هل تريد اضافتة")) {
                     closeReportsModal();
+                    closeBinanceModal();
 
                     typeSelect.value = 'buy';
                     handleTypeChange();
@@ -770,6 +780,7 @@ $transactions = $stmt->fetchAll();
         function renderBinanceOrders(orders) {
             const container = document.getElementById('binance-orders-container');
             container.innerHTML = '';
+            hasPendingBuyOrders = false;
 
             if (orders.length === 0) {
                 container.innerHTML = '<div class="text-center py-10 text-slate-500 font-bold italic">لا توجد عمليات حديثة لهذا التاريخ</div>';
@@ -793,6 +804,10 @@ $transactions = $stmt->fetchAll();
                 const amount = parseFloat(order.amount).toFixed(2);
                 const isP2P = order.source === 'P2P';
                 const isImported = order.is_imported === true;
+
+                if (isBuy && isCompleted && !isImported) {
+                    hasPendingBuyOrders = true;
+                }
 
                 let sourceBadge = '';
                 if(order.source === 'PAY') sourceBadge = '<span class="bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest">PAY</span>';
