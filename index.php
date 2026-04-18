@@ -907,7 +907,7 @@ $transactions = $stmt->fetchAll();
             if (type === 'buy') {
                 const amount = parseFloat(order.amount);
                 const price = parseFloat(order.unitPrice);
-                const grossYER = (amount / 0.999) * price;
+                const grossYER = (amount) * price;
                 let manualFee = 0;
                 if (grossYER > 300000) manualFee = 200;
                 else if (grossYER > 90000) manualFee = 50;
@@ -1032,8 +1032,8 @@ $transactions = $stmt->fetchAll();
             if (amount > 0) {
                 calcPreview.classList.remove('hidden');
                 if (type === 'buy') {
-                    const gross = amount / 0.999;
-                    const fee = gross - amount;
+                    const gross = amount;
+                    const fee = 0;
                     if (feeInput.dataset.manualModified !== "true") feeInput.value = fee.toFixed(2);
                     document.getElementById('prev-gross').textContent = gross.toFixed(4);
 
@@ -1051,7 +1051,7 @@ $transactions = $stmt->fetchAll();
 
                     document.getElementById('prev-total-yer').textContent = (grossYER + finalFee).toLocaleString();
                 } else {
-                    const fee = amount * 0.001;
+                    const fee = 0;
                     if (feeInput.dataset.manualModified !== "true") feeInput.value = fee.toFixed(2);
                     document.getElementById('prev-gross').textContent = (amount + fee).toFixed(4);
                     document.getElementById('prev-total-yer').textContent = (amount * price).toLocaleString();
@@ -1067,8 +1067,6 @@ $transactions = $stmt->fetchAll();
         }
 
         amountInput.addEventListener('input', () => {
-            manualFiatInput.dataset.manualModified = 'false';
-            feeInput.dataset.manualModified = 'false';
             updateCalculations();
         });
         priceInput.addEventListener('input', () => { updateCalculations(); saveMainFormState(); });
@@ -1119,6 +1117,7 @@ $transactions = $stmt->fetchAll();
             const editManualFee = document.getElementById('edit_manual_fee');
             editManualFee.value = data.manual_fee || 0;
             editManualFee.dataset.manualModified = "false";
+            document.getElementById('edit_binance_fee').dataset.manualModified = "true";
 
             document.getElementById('editManualFeeContainer').style.display = data.type === 'sell' ? 'none' : 'block';
 
@@ -1140,10 +1139,10 @@ $transactions = $stmt->fetchAll();
 
             if (amount > 0) {
                 if (type === 'buy') {
-                    const gross = amount / 0.999;
+                    const gross = amount;
                     const grossYER = gross * price;
 
-                    binanceFeeInput.value = (gross - amount).toFixed(2);
+                    if (binanceFeeInput.dataset.manualModified !== "true") binanceFeeInput.value = "0.00";
 
                     // أتمتة رسوم الصراف أيضاً عند التعديل - مع مراعاة التعديل اليدوي
                     let finalFee = 0;
@@ -1155,7 +1154,7 @@ $transactions = $stmt->fetchAll();
                         manualFeeInput.value = finalFee;
                     }
                 } else {
-                    binanceFeeInput.value = (amount * 0.001).toFixed(2);
+                    if (binanceFeeInput.dataset.manualModified !== "true") binanceFeeInput.value = "0.00";
                     manualFeeInput.value = 0;
                 }
             }
@@ -1168,6 +1167,10 @@ $transactions = $stmt->fetchAll();
         });
         document.getElementById('edit_price').addEventListener('input', updateEditCalculations);
         document.getElementById('edit_amount').addEventListener('input', updateEditCalculations);
+        document.getElementById('edit_binance_fee').addEventListener('input', function() {
+            this.dataset.manualModified = 'true';
+            updateEditCalculations();
+        });
         document.getElementById('edit_manual_fee').addEventListener('input', function() {
             this.dataset.manualModified = "true";
             updateEditCalculations();
