@@ -54,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['amount'])) {
         if (isset($_POST['binance_fee']) && $_POST['binance_fee'] !== '') {
             $binance_fee = floatval($_POST['binance_fee']);
         } else {
-            $binance_fee = $crypto_amount * 0.001;
+            $binance_fee = 0;
         }
 
         // في البيع، الكمية التي تخرج من المخزون هي الكمية المباعة + الرسوم (لأن الرسوم تُخصم من الرصيد)
@@ -76,8 +76,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['amount'])) {
             // في الشراء من بينانس، الكمية المدخلة غالباً هي الصافية، والرسوم مخصومة من المبلغ الكلي المدفوع
             $gross_crypto = $crypto_amount + $binance_fee;
         } else {
-            $gross_crypto = $crypto_amount / 0.999;
-            $binance_fee = $gross_crypto - $crypto_amount;
+            $gross_crypto = $crypto_amount;
+            $binance_fee = 0;
         }
         // الكمية التي تدخل المخزون هي الصافية (crypto_amount)
         $total_crypto_impact = $crypto_amount;
