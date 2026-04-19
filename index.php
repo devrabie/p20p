@@ -638,7 +638,13 @@ $transactions = $stmt->fetchAll();
                 <div class="text-center py-10 text-slate-500 font-bold italic">جاري تحميل العمليات...</div>
             </div>
 
-            <div class="flex gap-3 pt-3 border-t border-slate-800"><button onclick="fetchBinanceOrders()" class="flex-1 bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black py-2 rounded-lg font-black text-[10px] uppercase italic transition-all border border-yellow-500/20 shadow-lg shadow-yellow-500/5">تحديث القائمة</button><button onclick="closeBinanceModal()" class="flex-1 bg-slate-800 py-2 text-[10px] font-black text-white uppercase italic rounded-lg">إغلاق</button></div>
+            <div class="flex gap-3 pt-3 border-t border-slate-800">
+                <button onclick="fetchBinanceOrders()" class="flex-1 bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black py-2 rounded-lg font-black text-[10px] uppercase italic transition-all border border-yellow-500/20 shadow-lg shadow-yellow-500/5">تحديث القائمة</button>
+                <button onclick="matchBalance()" class="flex-1 bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white py-2 rounded-lg font-black text-[10px] uppercase italic transition-all border border-blue-500/20 flex items-center justify-center gap-2">
+                    <i data-lucide="scale" class="w-3.5 h-3.5"></i> مطابقة الرصيد
+                </button>
+                <button onclick="closeBinanceModal()" class="flex-1 bg-slate-800 py-2 text-[10px] font-black text-white uppercase italic rounded-lg">إغلاق</button>
+            </div>
         </div>
     </div>
 
@@ -646,6 +652,9 @@ $transactions = $stmt->fetchAll();
         lucide.createIcons();
         const BUY_PRICE_DEF = <?php echo $def_buy; ?>;
         const SELL_PRICE_DEF = <?php echo $def_sell; ?>;
+        const LEDGER_STOCK = <?php echo (float)$remaining_stock; ?>;
+        let currentBinanceBalance = 0;
+        let hasPendingBuyOrders = false;
 
         function updateClock() { const clock = document.getElementById('clock'); if (clock) { clock.textContent = new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' }); } }
         setInterval(updateClock, 1000); updateClock();
@@ -690,7 +699,8 @@ $transactions = $stmt->fetchAll();
                 if (data.status === 'success') {
                     card.classList.remove('hidden');
                     lastBalanceData = data.raw;
-                    valDisplay.innerText = parseFloat(data.balance).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    currentBinanceBalance = parseFloat(data.balance);
+                    valDisplay.innerText = currentBinanceBalance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
                 } else {
                     console.error('Binance Balance Error:', data.message);
                 }
@@ -706,6 +716,39 @@ $transactions = $stmt->fetchAll();
             document.getElementById('json_order_id').innerText = "Binance Wallet Balance";
             document.getElementById('json_content').textContent = JSON.stringify(lastBalanceData, null, 4);
             document.getElementById('jsonModal').classList.remove('hidden');
+        }
+
+        function matchBalance() {
+            if (hasPendingBuyOrders) {
+                alert("يوجد عمليات شراء في القائمة لم يتم إضافتها بعد. يرجى إضافتها أولاً لضمان دقة مطابقة الرصيد.");
+                return;
+            }
+
+            if (currentBinanceBalance > LEDGER_STOCK) {
+                if (confirm("لديك رصيد لم يسجل بالكمية هل تريد اضافتة")) {
+                    closeReportsModal();
+                    closeBinanceModal();
+
+                    typeSelect.value = 'buy';
+                    handleTypeChange();
+
+                    const diff = currentBinanceBalance - LEDGER_STOCK;
+                    amountInput.value = diff.toFixed(4);
+
+                    // تصفير الرسوم وحمايتها من التحديث التلقائي
+                    feeInput.value = "0.00";
+                    manualFiatInput.value = 0;
+                    feeInput.dataset.manualModified = 'true';
+                    manualFiatInput.dataset.manualModified = 'true';
+
+                    updateCalculations();
+
+                    document.getElementById('form-section').scrollIntoView({ behavior: 'smooth' });
+                    showToast("تم إدراج الفرق في الكمية، يرجى مراجعة السعر والحفظ");
+                }
+            } else {
+                alert("الرصيد في النظام مطابق أو أكبر من رصيد بينانس");
+            }
         }
 
         function fetchBinanceOrders() {
@@ -737,6 +780,7 @@ $transactions = $stmt->fetchAll();
         function renderBinanceOrders(orders) {
             const container = document.getElementById('binance-orders-container');
             container.innerHTML = '';
+            hasPendingBuyOrders = false;
 
             if (orders.length === 0) {
                 container.innerHTML = '<div class="text-center py-10 text-slate-500 font-bold italic">لا توجد عمليات حديثة لهذا التاريخ</div>';
@@ -760,6 +804,10 @@ $transactions = $stmt->fetchAll();
                 const amount = parseFloat(order.amount).toFixed(2);
                 const isP2P = order.source === 'P2P';
                 const isImported = order.is_imported === true;
+
+                if (isBuy && isCompleted && !isImported) {
+                    hasPendingBuyOrders = true;
+                }
 
                 let sourceBadge = '';
                 if(order.source === 'PAY') sourceBadge = '<span class="bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest">PAY</span>';
