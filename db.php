@@ -3,10 +3,10 @@
  * ملف الاتصال بقاعدة البيانات
  */
 
-$host = '127.0.0.1'; // استبدل localhost بـ 127.0.0.1 لحل مشكلة الأندرويد
-$db   = 'p2p'; // تأكد أن هذا هو اسم قاعدة البيانات التي أنشأتها
-$user = 'root'; // اسم المستخدم الافتراضي في أغلب تطبيقات الأندرويد هو root
-$pass = 'root';     // كلمة السر الافتراضية عادة تكون فارغة في KSWEB أو AWebServer
+$host = getenv('DB_HOST') ?: '127.0.0.1'; // استبدل localhost بـ 127.0.0.1 لحل مشكلة الأندرويد
+$db   = getenv('DB_NAME') ?: 'p2p'; // تأكد أن هذا هو اسم قاعدة البيانات التي أنشأتها
+$user = getenv('DB_USER') ?: 'root'; // اسم المستخدم الافتراضي في أغلب تطبيقات الأندرويد هو root
+$pass = getenv('DB_PASS') !== false ? getenv('DB_PASS') : 'root';     // كلمة السر الافتراضية عادة تكون فارغة في KSWEB أو AWebServer
 $charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
