@@ -622,18 +622,46 @@ $transactions = $stmt->fetchAll();
                 <button onclick="closeBinanceModal()" class="bg-slate-800 p-1.5 rounded-lg text-white hover:bg-rose-500 transition"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
             </div>
 
-            <div class="grid grid-cols-2 gap-2 mb-3 p-2 bg-slate-900/60 border border-slate-800 rounded-lg text-right">
-                <div>
-                    <label class="block text-[7px] font-black text-slate-500 uppercase mb-0.5">من تاريخ:</label>
-                    <input type="date" id="binance_start_date" class="w-full bg-slate-800 border-none text-white text-[9px] px-2 py-1 rounded focus:ring-1 ring-yellow-500" onchange="fetchBinanceOrders()">
+            <div class="flex flex-col gap-2 mb-3">
+                <!-- الملاح الزمني -->
+                <div class="flex items-center justify-between bg-slate-900/60 border border-slate-800 rounded-lg p-1 overflow-hidden">
+                    <button onclick="navigateBinanceDate(-1)" class="flex items-center gap-1.5 px-3 py-2 text-slate-400 hover:text-yellow-500 transition-all active:scale-90 group">
+                         <span class="text-[9px] font-black">السابق</span> <i data-lucide="chevron-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
+                    </button>
+
+                    <div class="flex flex-col items-center flex-grow px-2">
+                        <div id="binance_date_label" class="text-[10px] font-black text-yellow-500 tabular-nums">اليوم</div>
+                        <div id="binance_date_val" class="text-[9px] text-slate-500 font-bold tabular-nums">----/--/--</div>
+                    </div>
+
+                    <button onclick="navigateBinanceDate(1)" class="flex items-center gap-1.5 px-3 py-2 text-slate-400 hover:text-yellow-500 transition-all active:scale-90 group">
+                        <i data-lucide="chevron-left" class="w-4 h-4 group-hover:-translate-x-1 transition-transform"></i> <span class="text-[9px] font-black">التالي</span>
+                    </button>
                 </div>
-                <div>
-                    <label class="block text-[7px] font-black text-slate-500 uppercase mb-0.5">إلى تاريخ:</label>
-                    <input type="date" id="binance_end_date" class="w-full bg-slate-800 border-none text-white text-[9px] px-2 py-1 rounded focus:ring-1 ring-yellow-500" onchange="fetchBinanceOrders()">
+
+                <div class="flex gap-2">
+                    <button onclick="setBinanceToday()" class="flex-1 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 py-2 rounded-lg text-[9px] font-black border border-yellow-500/20 transition-all flex items-center justify-center gap-2">
+                        <i data-lucide="calendar-check" class="w-3.5 h-3.5"></i> عرض عمليات اليوم
+                    </button>
+                    <button onclick="toggleBinanceManualDate()" id="btn-manual-date" class="px-3 bg-slate-800 text-slate-500 hover:text-white rounded-lg text-[9px] font-black border border-slate-700 transition-colors" title="تحديد نطاق مخصص">
+                        <i data-lucide="calendar-range" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+                <!-- النطاق المخصص (مخفي افتراضياً) -->
+                <div id="binance_manual_range" class="hidden grid grid-cols-2 gap-2 mt-1 p-2 bg-slate-900/40 border border-slate-800 rounded-lg">
+                    <div>
+                        <label class="block text-[7px] font-black text-slate-500 uppercase mb-0.5">من تاريخ:</label>
+                        <input type="date" id="binance_start_date" class="w-full bg-slate-800 border-none text-white text-[9px] px-2 py-1 rounded focus:ring-1 ring-yellow-500" onchange="syncNavigatorWithInputs(); fetchBinanceOrders();">
+                    </div>
+                    <div>
+                        <label class="block text-[7px] font-black text-slate-500 uppercase mb-0.5">إلى تاريخ:</label>
+                        <input type="date" id="binance_end_date" class="w-full bg-slate-800 border-none text-white text-[9px] px-2 py-1 rounded focus:ring-1 ring-yellow-500" onchange="syncNavigatorWithInputs(); fetchBinanceOrders();">
+                    </div>
                 </div>
             </div>
 
-            <div id="binance-orders-container" class="overflow-y-auto flex-grow custom-scrollbar space-y-2 mb-3 px-1">
+            <div id="binance-orders-container" class="overflow-y-auto flex-grow custom-scrollbar space-y-2 mb-3 px-1 relative">
                 <!-- العمليات ستظهر هنا -->
                 <div class="text-center py-10 text-slate-500 font-bold italic">جاري تحميل العمليات...</div>
             </div>
@@ -667,11 +695,74 @@ $transactions = $stmt->fetchAll();
         function openBinanceModal() {
             document.getElementById('binanceModal').classList.remove('hidden');
             // تعيين تاريخ اليوم كافتراضي للفلتر إذا كان فارغاً
-            const dateInput = document.getElementById('binance_start_date');
-            if(!dateInput.value) {
-                const today = new Date().toISOString().split('T')[0];
-                dateInput.value = today;
+            const startDateInput = document.getElementById('binance_start_date');
+            const endDateInput = document.getElementById('binance_end_date');
+            if(!startDateInput.value || !endDateInput.value) {
+                const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+                startDateInput.value = today;
+                endDateInput.value = today;
             }
+            syncNavigatorWithInputs();
+            fetchBinanceOrders();
+        }
+
+        function toggleBinanceManualDate() {
+            const range = document.getElementById('binance_manual_range');
+            const btn = document.getElementById('btn-manual-date');
+            if (range.classList.contains('hidden')) {
+                range.classList.remove('hidden');
+                btn.classList.add('bg-yellow-500', 'text-black');
+                btn.classList.remove('bg-slate-800', 'text-slate-500');
+            } else {
+                range.classList.add('hidden');
+                btn.classList.remove('bg-yellow-500', 'text-black');
+                btn.classList.add('bg-slate-800', 'text-slate-500');
+            }
+        }
+
+        function syncNavigatorWithInputs() {
+            const start = document.getElementById('binance_start_date').value;
+            const end = document.getElementById('binance_end_date').value;
+            const label = document.getElementById('binance_date_label');
+            const val = document.getElementById('binance_date_val');
+
+            const today = new Date().toLocaleDateString('en-CA');
+            const yesterday = new Date(Date.now() - 86400000).toLocaleDateString('en-CA');
+
+            if (start === end) {
+                if (start === today) label.innerText = "اليوم";
+                else if (start === yesterday) label.innerText = "الأمس";
+                else label.innerText = "تاريخ محدد";
+                val.innerText = start;
+            } else {
+                label.innerText = "نطاق مخصص";
+                val.innerText = `${start} ↔ ${end}`;
+            }
+        }
+
+        function setBinanceToday() {
+            const today = new Date().toLocaleDateString('en-CA');
+            document.getElementById('binance_start_date').value = today;
+            document.getElementById('binance_end_date').value = today;
+            syncNavigatorWithInputs();
+            fetchBinanceOrders();
+        }
+
+        function navigateBinanceDate(offset) {
+            const startDateInput = document.getElementById('binance_start_date');
+            const endDateInput = document.getElementById('binance_end_date');
+
+            // نعتمد دائماً على تاريخ البداية للانتقال ليوم واحد
+            let current = new Date(startDateInput.value);
+            if (isNaN(current.getTime())) current = new Date();
+
+            current.setDate(current.getDate() + offset);
+            const newDate = current.toLocaleDateString('en-CA');
+
+            startDateInput.value = newDate;
+            endDateInput.value = newDate;
+
+            syncNavigatorWithInputs();
             fetchBinanceOrders();
         }
         function closeBinanceModal() {
@@ -787,7 +878,17 @@ $transactions = $stmt->fetchAll();
                 return;
             }
 
-            orders.forEach(order => {
+            // إضافة عداد إجمالي للعمليات المعروضة
+            const counterHtml = `
+                <div class="sticky top-0 z-20 flex justify-center mb-2 pointer-events-none">
+                    <span class="bg-slate-900/80 text-blue-400 px-4 py-1 rounded-full text-[9px] font-black border border-blue-500/20 backdrop-blur-md shadow-lg">
+                        عدد العمليات المعروضة: ${orders.length}
+                    </span>
+                </div>
+            `;
+            container.innerHTML = counterHtml;
+
+            orders.forEach((order, index) => {
                 const isBuy = order.side === 'BUY';
                 const isCompleted = order.status === 'COMPLETED';
                 const isCancelled = order.status === 'CANCELLED' || order.status === 'FAILED' || order.status === 'CANCELLED_BY_SYSTEM' || order.status === 'SYSTEM_CANCELLED';
@@ -817,14 +918,17 @@ $transactions = $stmt->fetchAll();
                 const card = `
                     <div class="relative glass-card p-4 hover:bg-slate-800/40 transition-all border-r-4 ${borderClass} group ${isImported || isCancelled ? 'opacity-60' : ''} overflow-hidden">
 
-                        <!-- زر JSON في الركن العلوي الأيسر (LTR context for the icon) -->
-                        <div class="absolute top-0 left-0">
+                        <!-- ترقيم العملية وزر JSON -->
+                        <div class="absolute top-0 left-0 flex items-start">
                             <button onclick='showRawJson(${JSON.stringify(order.raw)})' class="p-2 text-slate-700 hover:text-blue-400 hover:bg-blue-500/10 transition-all rounded-br-lg" title="بيانات JSON">
                                 <i data-lucide="code" class="w-3 h-3"></i>
                             </button>
                         </div>
+                        <div class="absolute top-0 right-0">
+                            <span class="bg-slate-800 text-slate-500 px-2 py-1 rounded-bl-lg text-[9px] font-black tabular-nums border-b border-l border-slate-700 shadow-sm">${index + 1}</span>
+                        </div>
 
-                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mt-2">
 
                             <!-- القسم الأيمن: دمج البيانات في كتلة واحدة -->
                             <div class="flex flex-col gap-2 flex-grow w-full">
