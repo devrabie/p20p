@@ -67,7 +67,7 @@ try {
     foreach ($orders as $order) {
         $formattedOrders[] = [
             'source' => 'P2P',
-            'orderNumber' => $order['orderNumber'],
+            'orderNumber' => (string)$order['orderNumber'],
             'side' => $order['tradeType'],
             'amount' => abs(floatval($order['amount'])),
             'unitPrice' => $order['unitPrice'],
@@ -86,7 +86,7 @@ try {
     foreach ($pay_txs as $tx) {
         if ($tx['currency'] === 'USDT') {
             $raw_amount = floatval($tx['amount']);
-            $order_id = $tx['transactionId'] ?? $tx['orderId'];
+            $order_id = (string)($tx['transactionId'] ?? $tx['orderId']);
 
             // تحديد الاتجاه بناءً على معرف المستخدم
             $side = 'SELL';
@@ -123,7 +123,7 @@ try {
             $status_map = [0 => 'PENDING', 1 => 'COMPLETED', 6 => 'COMPLETED'];
             $formattedOrders[] = [
                 'source' => 'DEPOSIT',
-                'orderNumber' => $dp['txId'] ?: $dp['id'],
+                'orderNumber' => (string)($dp['txId'] ?: $dp['id']),
                 'side' => 'BUY',
                 'amount' => abs(floatval($dp['amount'])),
                 'unitPrice' => 0,
@@ -151,7 +151,7 @@ try {
 
             $formattedOrders[] = [
                 'source' => 'WITHDRAW',
-                'orderNumber' => $wd['id'],
+                'orderNumber' => (string)$wd['id'],
                 'side' => 'SELL',
                 'amount' => abs(floatval($wd['amount'])),
                 'unitPrice' => 0,

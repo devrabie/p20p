@@ -584,6 +584,7 @@ $transactions = $stmt->fetchAll();
             <h2 class="text-xl font-black mb-8 text-blue-400 flex items-center gap-3 italic uppercase underline tracking-widest"><i data-lucide="edit"></i> تعديل بيانات</h2>
             <form id="edit-ajax-form" class="space-y-6">
                 <input type="hidden" name="id" id="edit_id">
+                <input type="hidden" name="binance_order_id" id="edit_binance_order_id">
                 <div><label class="block text-xs text-slate-400 mb-2 font-black italic tracking-widest uppercase">تعديل التاريخ</label><input type="datetime-local" name="transaction_date" id="edit_date" required class="input-dark font-black text-yellow-500 border-yellow-500/20 tabular-nums text-center"></div>
 
                 <div>
@@ -949,7 +950,7 @@ $transactions = $stmt->fetchAll();
                                 <div class="flex flex-wrap items-center gap-2">
                                     <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase ${typeBg} tracking-widest">${typeLabel}</span>
                                     ${sourceBadge} ${statusBadge}
-                                    <span class="text-[8px] font-mono text-slate-500 bg-black/30 px-2 py-0.5 rounded border border-slate-800 tracking-tighter">#${order.orderNumber.toString().substring(0,10)}...</span>
+                                    <span class="text-[8px] font-mono text-slate-500 bg-black/30 px-2 py-0.5 rounded border border-slate-800 tracking-tighter">#${order.orderNumber.substring(0,10)}...</span>
                                 </div>
 
                                 <div class="bg-black/20 p-3 rounded-lg border border-white/5 space-y-1 w-full">
@@ -1274,6 +1275,7 @@ $transactions = $stmt->fetchAll();
 
         function openEditModal(data) {
             document.getElementById('edit_id').value = data.id;
+            document.getElementById('edit_binance_order_id').value = data.binance_order_id || "";
 
             document.getElementById('edit_type').value = data.type;
             document.getElementById('edit_amount').value = data.crypto_amount;
