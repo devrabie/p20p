@@ -638,8 +638,7 @@ $transactions = $stmt->fetchAll();
                     </div>
                     <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-800">
                         <label class="block text-[8px] text-slate-500 uppercase font-black mb-1">الكمية Net</label>
-                        <div id="display_amount" class="text-sm font-black tabular-nums">0.00</div>
-                        <input type="hidden" name="amount" id="confirm_amount">
+                        <input type="number" step="any" name="amount" id="confirm_amount" class="w-full bg-transparent border-none p-0 text-sm font-black tabular-nums text-white focus:ring-0" placeholder="0.00">
                     </div>
                 </div>
 
@@ -689,6 +688,19 @@ $transactions = $stmt->fetchAll();
             <div class="flex justify-between items-center mb-3 pb-2 border-b border-slate-800">
                 <h2 class="text-sm font-black text-yellow-500 flex items-center gap-2 italic uppercase tracking-widest"><i data-lucide="refresh-cw" class="w-4 h-4"></i> جلب عمليات بينانس</h2>
                 <button onclick="closeBinanceModal()" class="bg-slate-800 p-1.5 rounded-lg text-white hover:bg-rose-500 transition"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
+            </div>
+
+            <!-- شريط التعليمات -->
+            <div class="bg-blue-500/10 border border-blue-500/20 p-3 rounded-lg mb-3 flex items-start gap-3">
+                <i data-lucide="info" class="w-5 h-5 text-blue-400 shrink-0 mt-0.5"></i>
+                <div class="text-[10px] text-slate-300 leading-relaxed font-bold">
+                    <p class="text-blue-400 font-black uppercase mb-1">تعليمات هامة للدقة المحاسبية:</p>
+                    <ul class="list-disc list-inside space-y-1">
+                        <li>يرجى إدراج العمليات <span class="text-yellow-500 underline decoration-yellow-500/30">الأقدم أولاً</span> لضمان حساب الأرباح والمخزون بدقة (نظام FIFO).</li>
+                        <li>استخدم الفلترة بالوقت في الأسفل للوصول للعمليات المفقودة في أوقات الذروة.</li>
+                        <li>العمليات المضافة مسبقاً تظهر باللون الباهت مع علامة صح خضراء.</li>
+                    </ul>
+                </div>
             </div>
 
             <div class="flex flex-col gap-2 mb-3">
@@ -1082,7 +1094,7 @@ $transactions = $stmt->fetchAll();
 
             document.getElementById('display_type').innerText = (type === 'buy' ? 'شراء' : 'بيع');
             document.getElementById('display_type').className = `text-sm font-black uppercase ${type === 'buy' ? 'text-emerald-500' : 'text-rose-500'}`;
-            document.getElementById('display_amount').innerText = amount.toFixed(4) + " USDT";
+            document.getElementById('confirm_amount').value = amount.toFixed(4);
 
             document.getElementById('confirm_price').value = (type === 'buy' ? BUY_PRICE_DEF : SELL_PRICE_DEF);
             document.getElementById('confirm_binance_fee').value = fee;
