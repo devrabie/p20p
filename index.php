@@ -614,6 +614,63 @@ $transactions = $stmt->fetchAll();
         </div>
     </div>
 
+    <!-- نافذة تأكيد الإدراج السريع -->
+    <div id="importConfirmModal" class="hidden fixed inset-0 bg-black/98 flex items-center justify-center p-4 z-[1010] animate-in fade-in zoom-in duration-200">
+        <div class="glass-card w-full max-w-md p-6 border-2 border-yellow-500/30 shadow-2xl text-right">
+            <div class="flex justify-between items-center mb-6 pb-2 border-b border-slate-800">
+                <h3 class="text-base font-black text-yellow-500 uppercase tracking-widest italic flex items-center gap-2">
+                    <i data-lucide="check-square" class="w-5 h-5"></i> تأكيد إدراج العملية
+                </h3>
+                <button onclick="document.getElementById('importConfirmModal').classList.add('hidden')" class="text-slate-500 hover:text-white transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form id="import-confirm-form" class="space-y-5">
+                <input type="hidden" name="binance_order_id" id="confirm_order_id">
+                <input type="hidden" name="type" id="confirm_type">
+                <input type="hidden" name="transaction_date" id="confirm_date">
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-800">
+                        <label class="block text-[8px] text-slate-500 uppercase font-black mb-1">النوع</label>
+                        <div id="display_type" class="text-sm font-black uppercase">---</div>
+                    </div>
+                    <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-800">
+                        <label class="block text-[8px] text-slate-500 uppercase font-black mb-1">الكمية Net</label>
+                        <div id="display_amount" class="text-sm font-black tabular-nums">0.00</div>
+                        <input type="hidden" name="amount" id="confirm_amount">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs text-slate-400 mb-2 font-black italic tracking-widest uppercase">السعر YER</label>
+                    <input type="number" step="any" name="price" id="confirm_price" required class="input-dark text-xl font-black text-yellow-500 border-yellow-500/20 tabular-nums text-center focus:ring-4 ring-yellow-500/10">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[10px] text-yellow-500 mb-1.5 font-black uppercase italic">رسوم (USDT)</label>
+                        <input type="number" step="any" name="binance_fee" id="confirm_binance_fee" class="input-dark text-sm font-bold text-yellow-500/80 tabular-nums text-center">
+                    </div>
+                    <div id="confirmManualFeeContainer">
+                        <label class="block text-[10px] text-blue-400 mb-1.5 font-black uppercase italic">رسوم صراف (YER)</label>
+                        <input type="number" step="any" name="manual_fee" id="confirm_manual_fee" class="input-dark text-sm font-bold text-blue-400/80 tabular-nums text-center">
+                    </div>
+                </div>
+
+                <div class="pt-4 flex gap-3">
+                    <button type="submit" id="confirm-submit-btn" class="flex-1 btn-primary-glass py-4 font-black uppercase italic shadow-lg shadow-indigo-500/20">
+                        <i data-lucide="plus-circle" class="w-4 h-4 inline ml-1"></i> إدراج وحفظ
+                    </button>
+                    <button type="button" onclick="document.getElementById('importConfirmModal').classList.add('hidden')" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white py-4 text-xs font-black uppercase italic rounded-xl transition-all">
+                        تراجع
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- نافذة عرض JSON الخام -->
     <div id="jsonModal" class="hidden fixed inset-0 bg-black/98 flex items-center justify-center p-4 z-[1001]">
         <div class="glass-card w-full max-w-lg p-6 border-2 border-blue-500/30 shadow-2xl text-left flex flex-col max-h-[80vh]">
@@ -1003,46 +1060,39 @@ $transactions = $stmt->fetchAll();
         }
 
         function manualImportToForm(order) {
-            document.getElementById('enable_backdate').checked = true;
-            toggleDateInput();
-
-            // ضبط التاريخ
-            const dt = order.createTime.replace(" ", "T").substring(0, 16);
-            document.getElementById('manual_date').value = dt;
-
-            // حفظ رقم الطلب لمنع التكرار
-            document.getElementById('form_binance_order_id').value = order.orderNumber;
-
+            const modal = document.getElementById('importConfirmModal');
             const type = order.side === 'BUY' ? 'buy' : 'sell';
-            document.getElementById('typeSelect').value = type;
-
             const fee = parseFloat(order.binance_fee || 0);
             let amount = parseFloat(order.amount);
 
-            // تصحيح الكمية: في الشراء فقط، الكمية الصافية للمخزون هي المبلغ ناقص الرسوم
-            // في البيع والسحب، الكمية التي تخرج من المحفظة هي المبلغ المكتوب في بينانس
+            // تصحيح الكمية
+            if (type === 'buy') amount = amount - fee;
+
+            // تعبئة بيانات النافذة
+            document.getElementById('confirm_order_id').value = order.orderNumber;
+            document.getElementById('confirm_type').value = type;
+            document.getElementById('confirm_date').value = order.createTime;
+            document.getElementById('confirm_amount').value = amount.toFixed(8);
+
+            document.getElementById('display_type').innerText = (type === 'buy' ? 'شراء' : 'بيع');
+            document.getElementById('display_type').className = `text-sm font-black uppercase ${type === 'buy' ? 'text-emerald-500' : 'text-rose-500'}`;
+            document.getElementById('display_amount').innerText = amount.toFixed(4) + " USDT";
+
+            document.getElementById('confirm_price').value = (type === 'buy' ? BUY_PRICE_DEF : SELL_PRICE_DEF);
+            document.getElementById('confirm_binance_fee').value = fee;
+
+            // حساب رسوم صراف افتراضية للشراء
+            let manualFee = 0;
             if (type === 'buy') {
-                amount = amount - fee;
+                const grossYER = amount * BUY_PRICE_DEF;
+                if (grossYER > 300000) manualFee = 200;
+                else if (grossYER > 90000) manualFee = 50;
             }
+            document.getElementById('confirm_manual_fee').value = manualFee;
+            document.getElementById('confirmManualFeeContainer').style.display = (type === 'sell' ? 'none' : 'block');
 
-            document.getElementById('crypto_amount_input').value = amount.toFixed(8);
-
-            // لعمليات Pay و Withdraw، السعر غالباً غير معروف، نترك للمستخدم إدخاله
-            document.getElementById('priceInput').value = type === 'buy' ? BUY_PRICE_DEF : SELL_PRICE_DEF;
-            document.getElementById('manual_fiat_fee').value = 0;
-            document.getElementById('binance_fee_input').dataset.manualModified = 'true';
-            document.getElementById('manual_fiat_fee').dataset.manualModified = 'true';
-
-            if (order.binance_fee !== undefined && order.binance_fee !== null) {
-                document.getElementById('binance_fee_input').value = fee;
-            }
-
-            handleTypeChange();
-            updateCalculations();
-            closeBinanceModal();
-
-            document.getElementById('form-section').scrollIntoView({ behavior: 'smooth' });
-            showToast("تم إدراج البيانات، يرجى مراجعة السعر والرسوم ثم الحفظ");
+            modal.classList.remove('hidden');
+            lucide.createIcons();
         }
 
         function quickImportOrder(order) {
@@ -1149,6 +1199,47 @@ $transactions = $stmt->fetchAll();
             if (window.location.hash === "#form-section") { document.getElementById('form-section').scrollIntoView({ behavior: 'smooth' }); }
             if (window.location.hash === "#reportsModal") { document.getElementById('reportsModal').classList.remove('hidden'); }
         }
+
+        const importConfirmForm = document.getElementById('import-confirm-form');
+        importConfirmForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const btn = document.getElementById('confirm-submit-btn');
+            const orderId = document.getElementById('confirm_order_id').value;
+
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader" class="animate-spin w-4 h-4"></i>';
+            lucide.createIcons();
+
+            fetch('process.php', { method: 'POST', body: new FormData(this) })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast("تم إدراج العملية بنجاح!");
+                    document.getElementById('importConfirmModal').classList.add('hidden');
+
+                    // تحديث زر العملية في قائمة بينانس إذا كانت مفتوحة
+                    const importBtn = document.getElementById(`btn-import-${orderId}`) ||
+                                     document.querySelector(`button[onclick*='${orderId}']`);
+
+                    if (importBtn) {
+                        const parent = importBtn.parentElement;
+                        parent.innerHTML = '<span class="bg-emerald-500/10 text-emerald-500 px-3 py-1.5 rounded-lg text-[9px] font-black flex items-center gap-1.5 border border-emerald-500/20"><i data-lucide="check-circle" class="w-3 h-3"></i> تم الإضافة</span>';
+                        lucide.createIcons();
+                    }
+                } else {
+                    alert(data.message);
+                    btn.disabled = false;
+                    btn.innerHTML = '<i data-lucide="plus-circle" class="w-4 h-4 inline ml-1"></i> إدراج وحفظ';
+                    lucide.createIcons();
+                }
+            })
+            .catch(err => {
+                alert("حدث خطأ تقني");
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="plus-circle" class="w-4 h-4 inline ml-1"></i> إدراج وحفظ';
+                lucide.createIcons();
+            });
+        });
 
         const ajaxForm = document.getElementById('ajax-form');
         ajaxForm.addEventListener('submit', function(e) {
