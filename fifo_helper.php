@@ -5,8 +5,8 @@
  */
 
 function recalculateFIFO($pdo, $user_id) {
-    // 1. جلب جميع العمليات مرتبة زمنياً
-    $stmt = $pdo->prepare("SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at ASC, id ASC");
+    // 1. جلب جميع العمليات مرتبة زمنياً - تحسين: جلب الأعمدة الضرورية فقط لتقليل استهلاك الذاكرة
+    $stmt = $pdo->prepare("SELECT id, type, crypto_amount, total_fiat_paid, total_crypto_deducted, fifo_cost_basis, fifo_profit FROM transactions WHERE user_id = ? ORDER BY created_at ASC, id ASC");
     $stmt->execute([$user_id]);
     $transactions = $stmt->fetchAll();
 
@@ -24,9 +24,11 @@ function recalculateFIFO($pdo, $user_id) {
                 'unit_cost' => $unit_cost
             ];
 
-            // في الشراء، التكلفة والربح دائماً 0
-            $update = $pdo->prepare("UPDATE transactions SET fifo_cost_basis = 0, fifo_profit = 0 WHERE id = ?");
-            $update->execute([$tx['id']]);
+            // في الشراء، التكلفة والربح دائماً 0 - نحدث فقط إذا لزم الأمر لتقليل ضغط الكتابة
+            if (floatval($tx['fifo_cost_basis']) != 0 || floatval($tx['fifo_profit']) != 0) {
+                $update = $pdo->prepare("UPDATE transactions SET fifo_cost_basis = 0, fifo_profit = 0 WHERE id = ?");
+                $update->execute([$tx['id']]);
+            }
 
         } else if ($tx['type'] == 'sell') {
             $sell_qty = round(floatval($tx['total_crypto_deducted']), 4);
@@ -65,8 +67,14 @@ function recalculateFIFO($pdo, $user_id) {
 
             $profit = $sell_fiat - $total_cost_basis;
 
-            $update = $pdo->prepare("UPDATE transactions SET fifo_cost_basis = ?, fifo_profit = ? WHERE id = ?");
-            $update->execute([round($total_cost_basis, 2), round($profit, 2), $tx['id']]);
+            $new_cost_basis = round($total_cost_basis, 2);
+            $new_profit = round($profit, 2);
+
+            // تحديث فقط إذا كانت القيم قد تغيرت فعلياً (يوفر الكثير من الوقت مع كثرة البيانات)
+            if (floatval($tx['fifo_cost_basis']) != $new_cost_basis || floatval($tx['fifo_profit']) != $new_profit) {
+                $update = $pdo->prepare("UPDATE transactions SET fifo_cost_basis = ?, fifo_profit = ? WHERE id = ?");
+                $update->execute([$new_cost_basis, $new_profit, $tx['id']]);
+            }
         }
     }
 }
@@ -87,19 +95,20 @@ function getFIFOStock($pdo, $user_id) {
 }
 
 /**
- * جلب معلومات طبقة الشراء القادمة للمستشار الذكي
+ * جلب طبقات الشراء الحالية والمتوفرة (نظام FIFO)
  */
-function getNextFIFOLayer($pdo, $user_id) {
-    $stmt = $pdo->prepare("SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at ASC, id ASC");
+function getFIFOLayers($pdo, $user_id, $limit = 2) {
+    $stmt = $pdo->prepare("SELECT id, type, crypto_amount, total_fiat_paid, total_crypto_deducted FROM transactions WHERE user_id = ? ORDER BY created_at ASC, id ASC");
     $stmt->execute([$user_id]);
     $transactions = $stmt->fetchAll();
 
     $buy_queue = [];
     foreach ($transactions as $tx) {
         if ($tx['type'] == 'buy') {
+            $net_qty = round(floatval($tx['crypto_amount']), 4);
             $buy_queue[] = [
-                'remaining_qty' => round(floatval($tx['crypto_amount']), 4),
-                'unit_cost' => ($tx['crypto_amount'] > 0) ? ($tx['total_fiat_paid'] / $tx['crypto_amount']) : 0
+                'remaining_qty' => $net_qty,
+                'unit_cost' => ($net_qty > 0) ? ($tx['total_fiat_paid'] / $net_qty) : 0
             ];
         } else if ($tx['type'] == 'sell') {
             $remaining_to_match = round(floatval($tx['total_crypto_deducted']), 4);
@@ -114,5 +123,14 @@ function getNextFIFOLayer($pdo, $user_id) {
             }
         }
     }
-    return count($buy_queue) > 0 ? $buy_queue[0] : null;
+
+    return array_slice($buy_queue, 0, $limit);
+}
+
+/**
+ * جلب معلومات طبقة الشراء القادمة للمستشار الذكي (للتوافق)
+ */
+function getNextFIFOLayer($pdo, $user_id) {
+    $layers = getFIFOLayers($pdo, $user_id, 1);
+    return !empty($layers) ? $layers[0] : null;
 }

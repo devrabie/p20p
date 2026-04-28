@@ -58,12 +58,12 @@ $where_clause = "WHERE user_id = ?";
 $params = [$user_id];
 
 if ($start_date) {
-    $where_clause .= " AND DATE(created_at) >= ?";
-    $params[] = $start_date;
+    $where_clause .= " AND created_at >= ?";
+    $params[] = $start_date . ' 00:00:00';
 }
 if ($end_date) {
-    $where_clause .= " AND DATE(created_at) <= ?";
-    $params[] = $end_date;
+    $where_clause .= " AND created_at <= ?";
+    $params[] = $end_date . ' 23:59:59';
 }
 
 // 7. استعلام تجميع البيانات اليومي مع حساب الأرباح بدقة لتجنب N+1 بناءً على FIFO

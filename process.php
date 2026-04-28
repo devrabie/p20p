@@ -22,13 +22,13 @@ if (!isset($_SESSION['user_id'])) {
 $user_id = $_SESSION['user_id'];
 
 // 3. التحقق من إرسال البيانات
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['amount'])) {
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['amount']) || isset($_POST['crypto_amount']))) {
     
     // أ- استلام البيانات وتحويلها لـ Float
     $type = $_POST['type']; 
-    $crypto_amount = floatval($_POST['amount'] ?? 0); // الكمية الصافية
+    $crypto_amount = floatval($_POST['amount'] ?? ($_POST['crypto_amount'] ?? 0)); // الكمية الصافية
     $price_per_unit = floatval($_POST['price'] ?? 0);
-    $manual_fiat_fee = floatval($_POST['manual_fee'] ?? 0); 
+    $manual_fiat_fee = floatval($_POST['manual_fee'] ?? ($_POST['manual_fiat_fee'] ?? 0));
 
     // ب- معالجة التاريخ
     $transaction_date = !empty($_POST['transaction_date']) ? $_POST['transaction_date'] : date('Y-m-d H:i:s');

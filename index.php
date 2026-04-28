@@ -42,24 +42,28 @@ $total_profit_usd_all = ($def_buy > 0) ? ($total_profit_yer_all / $def_buy) : 0;
 // جلب النطاق الزمني المختار (الافتراضي هو 'day')
 $range = $_GET['range'] ?? 'day';
 
-// تحديد نطاق التاريخ للاستعلامات
-$date_condition = "DATE(created_at) = ?";
-$date_params = [$today];
+// تحديد نطاق التاريخ للاستعلامات باستخدام نطاقات زمنية (Range) لتحسين استخدام الفهارس
 $range_label = "اليوم";
+$start_ts = $today . ' 00:00:00';
+$end_ts = $today . ' 23:59:59';
 
 if ($range === 'yesterday') {
     $yesterday = date('Y-m-d', strtotime('-1 day'));
-    $date_params = [$yesterday];
+    $start_ts = $yesterday . ' 00:00:00';
+    $end_ts = $yesterday . ' 23:59:59';
     $range_label = "الأمس";
 } else if ($range === 'week') {
-    $date_condition = "DATE(created_at) >= ?";
-    $date_params = [date('Y-m-d', strtotime('-6 days'))];
+    $start_ts = date('Y-m-d', strtotime('-6 days')) . ' 00:00:00';
+    $end_ts = $today . ' 23:59:59';
     $range_label = "آخر 7 أيام";
 } else if ($range === 'month') {
-    $date_condition = "DATE(created_at) >= ?";
-    $date_params = [date('Y-m-d', strtotime('-29 days'))];
+    $start_ts = date('Y-m-d', strtotime('-29 days')) . ' 00:00:00';
+    $end_ts = $today . ' 23:59:59';
     $range_label = "آخر 30 يوم";
 }
+
+$date_condition = "created_at >= ? AND created_at <= ?";
+$date_params = [$start_ts, $end_ts];
 
 // ب. حساب حجم التداول للنطاق المختار (Volume)
 $daily_buy_vol_stmt = $pdo->prepare("SELECT SUM(crypto_amount) FROM transactions WHERE user_id = ? AND type = 'buy' AND $date_condition");
@@ -79,15 +83,10 @@ $daily_out_money_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid) FROM transact
 $daily_out_money_stmt->execute(array_merge([$user_id], $date_params));
 $daily_out_money = $daily_out_money_stmt->fetchColumn() ?: 0;
 
-// د. حساب المخزون المتوفر (Stock)
-$total_in = $pdo->prepare("SELECT SUM(crypto_amount) FROM transactions WHERE user_id = ? AND type='buy'");
-$total_in->execute([$user_id]);
-$sum_in = $total_in->fetchColumn() ?: 0;
-
-$total_out = $pdo->prepare("SELECT SUM(total_crypto_deducted) FROM transactions WHERE user_id = ? AND type='sell'");
-$total_out->execute([$user_id]);
-$sum_out = $total_out->fetchColumn() ?: 0;
-$remaining_stock = $sum_in - $sum_out;
+// د. حساب المخزون المتوفر (Stock) والطبقات (للعرض والمحاكي)
+$remaining_stock = getFIFOStock($pdo, $user_id);
+$all_active_layers = getFIFOLayers($pdo, $user_id, 100);
+$current_layers = array_slice($all_active_layers, 0, 2);
 
 // هـ. حسابات النطاق المختار (أرباح ورسوم) بدقة بناءً على FIFO
 $daily_profit_stmt = $pdo->prepare("SELECT SUM(fifo_profit) FROM transactions WHERE user_id = ? AND type = 'sell' AND $date_condition");
@@ -107,8 +106,8 @@ $cumulative_profit = 0;
 
 if ($range === 'day') {
     // وضع اليوم: عمليات البيع لهذا اليوم مرتبة زمنياً (بحد أقصى 50 عملية)
-    $stmt = $pdo->prepare("SELECT created_at, fifo_profit as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) = ? ORDER BY id ASC LIMIT 50");
-    $stmt->execute([$user_id, $today]);
+    $stmt = $pdo->prepare("SELECT created_at, fifo_profit as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' AND created_at >= ? AND created_at <= ? ORDER BY id ASC LIMIT 50");
+    $stmt->execute([$user_id, $today . ' 00:00:00', $today . ' 23:59:59']);
     $data_rows = $stmt->fetchAll();
     
     foreach ($data_rows as $data) {
@@ -130,8 +129,8 @@ if ($range === 'day') {
 } else if ($range === 'yesterday') {
     // وضع الأمس: عمليات البيع للأمس مرتبة زمنياً
     $yesterday = date('Y-m-d', strtotime('-1 day'));
-    $stmt = $pdo->prepare("SELECT created_at, fifo_profit as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) = ? ORDER BY id ASC LIMIT 50");
-    $stmt->execute([$user_id, $yesterday]);
+    $stmt = $pdo->prepare("SELECT created_at, fifo_profit as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' AND created_at >= ? AND created_at <= ? ORDER BY id ASC LIMIT 50");
+    $stmt->execute([$user_id, $yesterday . ' 00:00:00', $yesterday . ' 23:59:59']);
     $data_rows = $stmt->fetchAll();
 
     foreach ($data_rows as $data) {
@@ -149,8 +148,8 @@ if ($range === 'day') {
         $current_d = date('Y-m-d', strtotime("-$i days"));
         $chart_labels[] = date('m-d', strtotime($current_d));
         
-        $day_stmt = $pdo->prepare("SELECT SUM(fifo_profit) FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) = ?");
-        $day_stmt->execute([$user_id, $current_d]);
+        $day_stmt = $pdo->prepare("SELECT SUM(fifo_profit) FROM transactions WHERE user_id = ? AND type = 'sell' AND created_at >= ? AND created_at <= ?");
+        $day_stmt->execute([$user_id, $current_d . ' 00:00:00', $current_d . ' 23:59:59']);
         $day_val = (float)($day_stmt->fetchColumn() ?: 0);
         
         $cumulative_profit += $day_val;
@@ -217,7 +216,14 @@ $transactions = $stmt->fetchAll();
             <div class="w-8 h-8 md:w-10 md:h-10 bg-yellow-500/10 rounded-full flex items-center justify-center border border-yellow-500/20 group-hover:scale-110 transition"><i data-lucide="user-lock" class="w-4 h-4 md:w-6 md:h-6 text-yellow-500"></i></div>
             <div class="flex flex-col text-right"><span class="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase italic">حساب التاجر</span><span class="text-xs md:text-sm font-black text-white"><?php echo htmlspecialchars($username); ?></span></div>
         </div>
-        <a href="logout.php" onclick="return confirm('خروج؟')" class="flex items-center gap-2 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white px-3 md:px-5 py-2 rounded text-[10px] md:text-xs font-black border border-rose-500/20 transition-all"><span>خروج آمن</span> <i data-lucide="log-out" class="w-3.5 h-3.5 md:w-4 md:h-4"></i></a>
+        <div class="flex items-center gap-3">
+            <?php if(isset($_SESSION['admin_user_id'])): ?>
+                <a href="admin.php?action=return_to_admin" class="flex items-center gap-2 bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white px-3 md:px-5 py-2 rounded text-[10px] md:text-xs font-black border border-blue-500/20 transition-all">
+                    <i data-lucide="undo-2" class="w-3.5 h-3.5"></i> العودة للإدارة
+                </a>
+            <?php endif; ?>
+            <a href="logout.php" onclick="return confirm('خروج؟')" class="flex items-center gap-2 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white px-3 md:px-5 py-2 rounded text-[10px] md:text-xs font-black border border-rose-500/20 transition-all"><span>خروج آمن</span> <i data-lucide="log-out" class="w-3.5 h-3.5 md:w-4 md:h-4"></i></a>
+        </div>
     </nav>
 
     <div class="max-w-6xl mx-auto">
@@ -227,7 +233,7 @@ $transactions = $stmt->fetchAll();
                 <div class="flex justify-center md:justify-start gap-4 mt-3">
                     <div class="text-[10px] md:text-xs text-blue-400 font-bold border-l border-slate-700 pl-4 uppercase tracking-tighter">شراء: <span class="text-white"><?php echo number_format($def_buy, 2); ?></span></div>
                     <div class="text-[10px] md:text-xs text-green-400 font-bold border-l border-slate-700 pl-4 uppercase tracking-tighter">بيع: <span class="text-white"><?php echo number_format($def_sell, 2); ?></span></div>
-                    <button onclick="document.getElementById('settingsModal').classList.remove('hidden')" class="text-yellow-500 hover:scale-125 transition"><i data-lucide="sliders" class="w-4 h-4 md:w-5 md:h-5"></i></button>
+                    <button onclick="openSettingsModal()" class="text-yellow-500 hover:scale-125 transition"><i data-lucide="sliders" class="w-4 h-4 md:w-5 md:h-5"></i></button>
                 </div>
             </div>
 
@@ -251,7 +257,7 @@ $transactions = $stmt->fetchAll();
 
         <!-- الشريط الذكي (Smart Banner) -->
         <?php
-        $next_layer = getNextFIFOLayer($pdo, $user_id);
+        $next_layer = $current_layers[0] ?? null;
         if($next_layer):
             $layer_cost = $next_layer['unit_cost'];
             $break_even_price = $layer_cost * 1.001;
@@ -279,43 +285,40 @@ $transactions = $stmt->fetchAll();
             </div>
         </div>
 
-        <!-- نافذة محاكي الأرباح المنبثقة -->
-        <div id="profitCalcModal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-[600]">
-            <div class="glass-card w-full max-w-md p-8 border-2 border-blue-500/30 shadow-2xl text-right">
+        <!-- نافذة محاكي الأرباح المنبثقة المطور -->
+        <div id="profitCalcModal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center p-2 md:p-4 z-[600]">
+            <div class="glass-card w-full max-w-2xl p-4 md:p-8 border-2 border-blue-500/30 shadow-2xl text-right flex flex-col max-h-[90vh]">
                 <div class="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
-                    <h2 class="text-lg font-black text-blue-400 flex items-center gap-3 italic uppercase tracking-widest"><i data-lucide="calculator"></i> محاكي الأرباح المتوقعة</h2>
+                    <h2 class="text-lg font-black text-blue-400 flex items-center gap-3 italic uppercase tracking-widest"><i data-lucide="calculator"></i> محاكي أرباح الطبقات</h2>
                     <button onclick="closeProfitCalculator()" class="bg-slate-800 p-2 rounded-lg text-white hover:bg-rose-500 transition"><i data-lucide="x" class="w-4 h-4"></i></button>
                 </div>
 
-                <p class="text-xs text-slate-500 mb-6 font-bold italic leading-relaxed">
-                    بناءً على مخزونك الحالي (<span class="text-yellow-500"><?php echo number_format($remaining_stock, 2); ?> USDT</span>) ومتوسط شراء (<span class="text-purple-400"><?php echo number_format($avg_buy_price, 2); ?> YER</span>)، إليك الأرباح الصافية المتوقعة عند البيع بأسعار مختلفة:
-                </p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label class="block text-[10px] text-slate-500 font-black uppercase mb-2 tracking-widest">سعر البيع المحاكي (YER)</label>
+                        <input type="number" id="sim_price" value="<?php echo $def_sell; ?>" class="input-dark text-2xl font-black text-yellow-500 text-center" oninput="updateSimulation()">
 
-                <div class="space-y-4">
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800">
-                        <p class="text-[10px] text-slate-500 font-bold uppercase mb-1">بالسعر الافتراضي للإعدادات (<?php echo number_format($def_sell, 2); ?>)</p>
-                        <div class="flex justify-between items-center">
-                            <span class="text-sm font-black <?php echo ($def_sell > $break_even_price) ? 'text-emerald-500' : 'text-rose-500'; ?> tabular-nums"><?php echo number_format(($remaining_stock * $def_sell) - ($layer_cost * ($remaining_stock * 1.001))); ?> YER</span>
-                            <span class="text-[10px] text-slate-500">صافي الربح</span>
+                        <div class="grid grid-cols-3 gap-2 mt-3">
+                            <button onclick="setSimPrice(<?php echo $def_sell; ?>)" class="bg-slate-800 py-2 rounded text-[9px] font-bold text-slate-400 hover:text-white">الافتراضي</button>
+                            <button onclick="setSimPrice(<?php echo round($recommended_price, 1); ?>)" class="bg-emerald-500/10 py-2 rounded text-[9px] font-bold text-emerald-500 hover:bg-emerald-500 hover:text-white">توصية</button>
+                            <button onclick="setSimPrice(<?php echo round($best_price, 1); ?>)" class="bg-yellow-500/10 py-2 rounded text-[9px] font-bold text-yellow-500 hover:bg-yellow-500 hover:text-white">ممتاز</button>
                         </div>
                     </div>
-                    <div class="bg-emerald-500/5 p-4 rounded-xl border border-emerald-500/20">
-                        <p class="text-[10px] text-emerald-500 font-bold uppercase mb-1 tracking-widest">بسعر التوصية (<?php echo number_format($recommended_price, 2); ?>)</p>
-                        <div class="flex justify-between items-center">
-                            <span class="text-sm font-black text-emerald-400 tabular-nums"><?php echo number_format(($remaining_stock * $recommended_price) - ($layer_cost * ($remaining_stock * 1.001))); ?> YER</span>
-                            <span class="text-[10px] text-emerald-600 font-bold">ربح متوسط (0.7%)</span>
-                        </div>
-                    </div>
-                    <div class="bg-yellow-500/5 p-4 rounded-xl border border-yellow-500/20">
-                        <p class="text-[10px] text-yellow-500 font-bold uppercase mb-1 tracking-widest">بأفضل سعر بيع (<?php echo number_format($best_price, 2); ?>)</p>
-                        <div class="flex justify-between items-center">
-                            <span class="text-sm font-black text-yellow-400 tabular-nums"><?php echo number_format(($remaining_stock * $best_price) - ($layer_cost * ($remaining_stock * 1.001))); ?> YER</span>
-                            <span class="text-[10px] text-yellow-600 font-bold">ربح ممتاز (1.2%)</span>
-                        </div>
+                    <div class="bg-blue-500/5 p-4 rounded-2xl border border-blue-500/10 flex flex-col justify-center">
+                        <p class="text-[10px] text-blue-400 font-black uppercase mb-1 text-center">إجمالي الربح المتوقع</p>
+                        <h3 id="sim_total_profit" class="text-3xl font-black text-white text-center tabular-nums">0 <span class="text-xs opacity-40">YER</span></h3>
+                        <p id="sim_total_usd" class="text-center text-xs text-slate-500 font-bold mt-1">$0.00</p>
                     </div>
                 </div>
 
-                <div class="mt-8 text-center"><button onclick="closeProfitCalculator()" class="w-full bg-slate-800 text-white py-4 rounded-xl font-bold text-xs uppercase italic tracking-widest hover:bg-slate-700 transition">فهمت ذلك</button></div>
+                <div class="flex-grow overflow-y-auto custom-scrollbar pr-1 space-y-3" id="sim_layers_container">
+                    <!-- سيتم تعبئة تفاصيل الطبقات هنا عبر JS -->
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-slate-800 text-center">
+                    <p class="text-[9px] text-slate-600 italic font-bold mb-4">ملاحظة: يتم حساب الأرباح بناءً على مطابقة المخزون المتاح مع طبقات الشراء الأقدم (FIFO)</p>
+                    <button onclick="closeProfitCalculator()" class="w-full bg-slate-800 text-white py-4 rounded-xl font-bold text-xs uppercase italic tracking-widest hover:bg-slate-700 transition">إغلاق المحاكي</button>
+                </div>
             </div>
         </div>
         <?php endif; ?>
@@ -325,7 +328,26 @@ $transactions = $stmt->fetchAll();
             <div class="glass-card p-5 border-r-4 border-yellow-500 shadow-xl">
                 <span class="text-slate-400 text-[10px] font-bold block mb-1 uppercase italic tracking-tighter">المخزون المتوفر (Stock)</span>
                 <h3 class="text-lg md:text-xl font-black text-yellow-500 tabular-nums"><?php echo number_format($remaining_stock, 2); ?></h3>
-                <p class="text-[9px] text-slate-500 font-bold mt-1">تكلفة الطبقة الحالية: <?php echo number_format($layer_cost ?? 0, 1); ?></p>
+
+                <div class="mt-2 space-y-1">
+                    <?php if(!empty($current_layers[0])): ?>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[8px] bg-yellow-500/10 text-yellow-500 px-1 rounded font-black">الآن</span>
+                            <p class="text-[9px] text-slate-400 font-bold italic">
+                                <?php echo number_format($current_layers[0]['remaining_qty'], 2); ?> USDT @ <span class="text-white"><?php echo number_format($current_layers[0]['unit_cost'], 1); ?></span>
+                            </p>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if(!empty($current_layers[1])): ?>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[8px] bg-blue-500/10 text-blue-400 px-1 rounded font-black">التالية</span>
+                            <p class="text-[9px] text-slate-500 font-bold italic">
+                                <?php echo number_format($current_layers[1]['remaining_qty'], 2); ?> USDT @ <span class="text-slate-400"><?php echo number_format($current_layers[1]['unit_cost'], 1); ?></span>
+                            </p>
+                        </div>
+                    <?php endif; ?>
+                </div>
             </div>
             <div class="glass-card p-5 bg-blue-500/10 border border-blue-500/20">
                 <span class="text-[9px] text-blue-500 font-black uppercase mb-1 block">ربح اليوم</span>
@@ -566,7 +588,7 @@ $transactions = $stmt->fetchAll();
                     </div>
                 </div>
 
-                <div class="flex gap-4 pt-4"><button type="submit" class="flex-1 btn-primary-glass py-4 font-black uppercase italic">حفظ</button><button type="button" onclick="document.getElementById('settingsModal').classList.add('hidden')" class="flex-1 bg-slate-800 py-4 text-xs font-black text-white uppercase italic">إغلاق</button></div>
+                <div class="flex gap-4 pt-4"><button type="submit" class="flex-1 btn-primary-glass py-4 font-black uppercase italic">حفظ</button><button type="button" onclick="closeSettingsModal()" class="flex-1 bg-slate-800 py-4 text-xs font-black text-white uppercase italic">إغلاق</button></div>
             </form>
         </div>
     </div>
@@ -577,6 +599,7 @@ $transactions = $stmt->fetchAll();
             <h2 class="text-xl font-black mb-8 text-blue-400 flex items-center gap-3 italic uppercase underline tracking-widest"><i data-lucide="edit"></i> تعديل بيانات</h2>
             <form id="edit-ajax-form" class="space-y-6">
                 <input type="hidden" name="id" id="edit_id">
+                <input type="hidden" name="binance_order_id" id="edit_binance_order_id">
                 <div><label class="block text-xs text-slate-400 mb-2 font-black italic tracking-widest uppercase">تعديل التاريخ</label><input type="datetime-local" name="transaction_date" id="edit_date" required class="input-dark font-black text-yellow-500 border-yellow-500/20 tabular-nums text-center"></div>
 
                 <div>
@@ -597,7 +620,63 @@ $transactions = $stmt->fetchAll();
                     <div id="editManualFeeContainer"><label class="block text-xs text-blue-400 mb-2 font-black uppercase italic text-center">رسوم صراف (YER)</label><input type="number" step="any" name="manual_fee" id="edit_manual_fee" class="input-dark text-blue-400 font-black tabular-nums text-center"></div>
                 </div>
 
-                <div class="flex gap-4 pt-4"><button type="submit" id="edit-submit-btn" class="flex-1 btn-primary-glass py-4 font-black text-white uppercase italic">تحديث</button><button type="button" onclick="document.getElementById('editModal').classList.add('hidden')" class="flex-1 bg-slate-800 py-4 text-xs font-black text-white uppercase italic">تراجع</button></div>
+                <div class="flex gap-4 pt-4"><button type="submit" id="edit-submit-btn" class="flex-1 btn-primary-glass py-4 font-black text-white uppercase italic">تحديث</button><button type="button" onclick="closeEditModal()" class="flex-1 bg-slate-800 py-4 text-xs font-black text-white uppercase italic">تراجع</button></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- نافذة تأكيد الإدراج السريع -->
+    <div id="importConfirmModal" class="hidden fixed inset-0 bg-black/98 flex items-center justify-center p-4 z-[1010] animate-in fade-in zoom-in duration-200">
+        <div class="glass-card w-full max-w-md p-6 border-2 border-yellow-500/30 shadow-2xl text-right">
+            <div class="flex justify-between items-center mb-6 pb-2 border-b border-slate-800">
+                <h3 class="text-base font-black text-yellow-500 uppercase tracking-widest italic flex items-center gap-2">
+                    <i data-lucide="check-square" class="w-5 h-5"></i> تأكيد إدراج العملية
+                </h3>
+                <button onclick="closeImportConfirmModal()" class="text-slate-500 hover:text-white transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form id="import-confirm-form" class="space-y-5">
+                <input type="hidden" name="binance_order_id" id="confirm_order_id">
+                <input type="hidden" name="type" id="confirm_type">
+                <input type="hidden" name="transaction_date" id="confirm_date">
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-800">
+                        <label class="block text-[8px] text-slate-500 uppercase font-black mb-1">النوع</label>
+                        <div id="display_type" class="text-sm font-black uppercase">---</div>
+                    </div>
+                    <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-800">
+                        <label class="block text-[8px] text-slate-500 uppercase font-black mb-1">الكمية Net</label>
+                        <input type="number" step="any" name="amount" id="confirm_amount" class="w-full bg-transparent border-none p-0 text-sm font-black tabular-nums text-white focus:ring-0" placeholder="0.00">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs text-slate-400 mb-2 font-black italic tracking-widest uppercase">السعر YER</label>
+                    <input type="number" step="any" name="price" id="confirm_price" required class="input-dark text-xl font-black text-yellow-500 border-yellow-500/20 tabular-nums text-center focus:ring-4 ring-yellow-500/10">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[10px] text-yellow-500 mb-1.5 font-black uppercase italic">رسوم (USDT)</label>
+                        <input type="number" step="any" name="binance_fee" id="confirm_binance_fee" class="input-dark text-sm font-bold text-yellow-500/80 tabular-nums text-center">
+                    </div>
+                    <div id="confirmManualFeeContainer">
+                        <label class="block text-[10px] text-blue-400 mb-1.5 font-black uppercase italic">رسوم صراف (YER)</label>
+                        <input type="number" step="any" name="manual_fee" id="confirm_manual_fee" class="input-dark text-sm font-bold text-blue-400/80 tabular-nums text-center">
+                    </div>
+                </div>
+
+                <div class="pt-4 flex gap-3">
+                    <button type="submit" id="confirm-submit-btn" class="flex-1 btn-primary-glass py-4 font-black uppercase italic shadow-lg shadow-indigo-500/20">
+                        <i data-lucide="plus-circle" class="w-4 h-4 inline ml-1"></i> إدراج وحفظ
+                    </button>
+                    <button type="button" onclick="closeImportConfirmModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white py-4 text-xs font-black uppercase italic rounded-xl transition-all">
+                        تراجع
+                    </button>
+                </div>
             </form>
         </div>
     </div>
@@ -607,10 +686,10 @@ $transactions = $stmt->fetchAll();
         <div class="glass-card w-full max-w-lg p-6 border-2 border-blue-500/30 shadow-2xl text-left flex flex-col max-h-[80vh]">
             <div class="flex justify-between items-center mb-4 pb-2 border-b border-slate-800">
                 <h3 class="text-xs font-black text-blue-400 uppercase tracking-widest italic">Binance Raw Data (JSON)</h3>
-                <button onclick="document.getElementById('jsonModal').classList.add('hidden')" class="text-slate-500 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+                <button onclick="closeJsonModal()" class="text-slate-500 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
             </div>
             <pre id="json-display" class="bg-black/50 p-4 rounded text-[10px] font-mono text-emerald-400 overflow-auto custom-scrollbar flex-grow dir-ltr text-left"></pre>
-            <button onclick="document.getElementById('jsonModal').classList.add('hidden')" class="mt-4 w-full bg-slate-800 py-2 text-[10px] font-bold text-white rounded">إغلاق</button>
+            <button onclick="closeJsonModal()" class="mt-4 w-full bg-slate-800 py-2 text-[10px] font-bold text-white rounded">إغلاق</button>
         </div>
     </div>
 
@@ -622,42 +701,68 @@ $transactions = $stmt->fetchAll();
                 <button onclick="closeBinanceModal()" class="bg-slate-800 p-1.5 rounded-lg text-white hover:bg-rose-500 transition"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
             </div>
 
+            <!-- شريط التعليمات المطوي -->
+            <div class="mb-3">
+                <button onclick="toggleInstructions()" class="w-full flex items-center justify-between bg-blue-500/10 border border-blue-500/20 p-2.5 rounded-lg text-blue-400 hover:bg-blue-500/20 transition-all">
+                    <div class="flex items-center gap-2 text-[10px] font-black uppercase italic">
+                        <i data-lucide="info" class="w-3.5 h-3.5"></i> تعليمات الاستخدام والدقة المحاسبية
+                    </div>
+                    <i data-lucide="chevron-down" id="instr-icon" class="w-4 h-4 transition-transform duration-300"></i>
+                </button>
+                <div id="instructions-content" class="hidden overflow-hidden bg-blue-500/5 border-x border-b border-blue-500/20 rounded-b-lg p-3 mx-1">
+                    <div class="text-[10px] text-slate-300 leading-relaxed font-bold">
+                        <ul class="list-disc list-inside space-y-1.5">
+                            <li>يرجى إدراج العمليات <span class="text-yellow-500 underline decoration-yellow-500/30">الأقدم أولاً</span> لضمان حساب الأرباح والمخزون بدقة (نظام FIFO).</li>
+                            <li>استخدم الفلترة بالوقت في الأسفل للوصول للعمليات المفقودة في أوقات الذروة.</li>
+                            <li>العمليات المضافة مسبقاً تظهر باللون الباهت مع علامة صح خضراء.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
             <div class="flex flex-col gap-2 mb-3">
-                <!-- الملاح الزمني -->
-                <div class="flex items-center justify-between bg-slate-900/60 border border-slate-800 rounded-lg p-1 overflow-hidden">
-                    <button onclick="navigateBinanceDate(-1)" class="flex items-center gap-1.5 px-3 py-2 text-slate-400 hover:text-yellow-500 transition-all active:scale-90 group">
-                         <span class="text-[9px] font-black">السابق</span> <i data-lucide="chevron-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
+                <!-- شريط التحكم المدمج -->
+                <div class="flex items-center gap-1 bg-slate-900/60 border border-slate-800 rounded-xl p-1 overflow-hidden">
+                    <!-- التنقل للسابق -->
+                    <button onclick="navigateBinanceDate(-1)" class="p-2 text-slate-500 hover:text-yellow-500 transition-all active:scale-90" title="اليوم السابق">
+                        <i data-lucide="chevron-right" class="w-5 h-5"></i>
                     </button>
 
-                    <div class="flex flex-col items-center flex-grow px-2">
-                        <div id="binance_date_label" class="text-[10px] font-black text-yellow-500 tabular-nums">اليوم</div>
-                        <div id="binance_date_val" class="text-[9px] text-slate-500 font-bold tabular-nums">----/--/--</div>
+                    <!-- معلومات التاريخ واليوم -->
+                    <div class="flex-grow flex flex-col items-center justify-center px-1 border-x border-slate-800/50 cursor-pointer hover:bg-white/5 transition-all rounded-md" onclick="setBinanceToday()" title="العودة لليوم">
+                        <div id="binance_date_label" class="text-[9px] font-black text-yellow-500 tabular-nums uppercase leading-none mb-0.5">اليوم</div>
+                        <div id="binance_date_val" class="text-[8px] text-slate-500 font-bold tabular-nums leading-none">----/--/--</div>
                     </div>
 
-                    <button onclick="navigateBinanceDate(1)" class="flex items-center gap-1.5 px-3 py-2 text-slate-400 hover:text-yellow-500 transition-all active:scale-90 group">
-                        <i data-lucide="chevron-left" class="w-4 h-4 group-hover:-translate-x-1 transition-transform"></i> <span class="text-[9px] font-black">التالي</span>
+                    <!-- التنقل للتالي -->
+                    <button onclick="navigateBinanceDate(1)" class="p-2 text-slate-500 hover:text-yellow-500 transition-all active:scale-90" title="اليوم التالي">
+                        <i data-lucide="chevron-left" class="w-5 h-5"></i>
                     </button>
-                </div>
 
-                <div class="flex gap-2">
-                    <button onclick="setBinanceToday()" class="flex-1 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 py-2 rounded-lg text-[9px] font-black border border-yellow-500/20 transition-all flex items-center justify-center gap-2">
-                        <i data-lucide="calendar-check" class="w-3.5 h-3.5"></i> عرض عمليات اليوم
-                    </button>
-                    <button onclick="toggleBinanceManualDate()" id="btn-manual-date" class="px-3 bg-slate-800 text-slate-500 hover:text-white rounded-lg text-[9px] font-black border border-slate-700 transition-colors" title="تحديد نطاق مخصص">
+                    <!-- فاصل عمودي -->
+                    <div class="w-px h-6 bg-slate-800 mx-1"></div>
+
+                    <!-- زر الفلترة المخصص -->
+                    <button onclick="toggleBinanceManualDate()" id="btn-manual-date" class="p-2.5 bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-all" title="تحديد نطاق تاريخ مخصص">
                         <i data-lucide="calendar-range" class="w-4 h-4"></i>
                     </button>
                 </div>
 
                 <!-- النطاق المخصص (مخفي افتراضياً) -->
-                <div id="binance_manual_range" class="hidden grid grid-cols-2 gap-2 mt-1 p-2 bg-slate-900/40 border border-slate-800 rounded-lg">
-                    <div>
-                        <label class="block text-[7px] font-black text-slate-500 uppercase mb-0.5">من تاريخ:</label>
-                        <input type="date" id="binance_start_date" class="w-full bg-slate-800 border-none text-white text-[9px] px-2 py-1 rounded focus:ring-1 ring-yellow-500" onchange="syncNavigatorWithInputs(); fetchBinanceOrders();">
+                <div id="binance_manual_range" class="hidden flex flex-col gap-2 mt-1 p-3 bg-slate-900/40 border border-slate-800 rounded-xl shadow-inner">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="space-y-1.5">
+                            <label class="block text-[8px] font-black text-slate-500 uppercase tracking-widest">من تاريخ</label>
+                            <input type="date" id="binance_start_date" class="w-full bg-slate-800 border-none text-white text-[10px] px-2.5 py-1.5 rounded-lg focus:ring-1 ring-yellow-500/50" onchange="syncNavigatorWithInputs(); fetchBinanceOrders();">
+                            <input type="time" id="binance_start_time" value="00:00" class="w-full bg-slate-800 border-none text-slate-400 text-[10px] px-2.5 py-1.5 rounded-lg focus:ring-1 ring-yellow-500/50" onchange="fetchBinanceOrders();">
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="block text-[8px] font-black text-slate-500 uppercase tracking-widest">إلى تاريخ</label>
+                            <input type="date" id="binance_end_date" class="w-full bg-slate-800 border-none text-white text-[10px] px-2.5 py-1.5 rounded-lg focus:ring-1 ring-yellow-500/50" onchange="syncNavigatorWithInputs(); fetchBinanceOrders();">
+                            <input type="time" id="binance_end_time" value="23:59" class="w-full bg-slate-800 border-none text-slate-400 text-[10px] px-2.5 py-1.5 rounded-lg focus:ring-1 ring-yellow-500/50" onchange="fetchBinanceOrders();">
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-[7px] font-black text-slate-500 uppercase mb-0.5">إلى تاريخ:</label>
-                        <input type="date" id="binance_end_date" class="w-full bg-slate-800 border-none text-white text-[9px] px-2 py-1 rounded focus:ring-1 ring-yellow-500" onchange="syncNavigatorWithInputs(); fetchBinanceOrders();">
-                    </div>
+                    <p class="text-[7px] text-slate-600 italic text-center mt-1">تلميح: يمكنك تحديد الوقت بدقة لجلب العمليات المفقودة في أوقات الذروة</p>
                 </div>
             </div>
 
@@ -683,17 +788,52 @@ $transactions = $stmt->fetchAll();
         const LEDGER_STOCK = <?php echo (float)$remaining_stock; ?>;
         let currentBinanceBalance = 0;
         let hasPendingBuyOrders = false;
+        let oldestBinanceTimestamp = null;
+        let totalRenderedBinanceOrders = 0;
 
         function updateClock() { const clock = document.getElementById('clock'); if (clock) { clock.textContent = new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' }); } }
         setInterval(updateClock, 1000); updateClock();
 
+        function toggleBodyScroll(lock) {
+            if (lock) {
+                document.body.style.overflow = 'hidden';
+            } else {
+                const modalIds = ['reportsModal', 'binanceModal', 'settingsModal', 'editModal', 'profitCalcModal', 'importConfirmModal', 'jsonModal'];
+                const anyOpen = modalIds.some(id => {
+                    const el = document.getElementById(id);
+                    return el && !el.classList.contains('hidden');
+                });
+                if (!anyOpen) {
+                    document.body.style.overflow = '';
+                }
+            }
+        }
+
         function showToast(msg) { const toast = document.getElementById('toast'); document.getElementById('toast-msg').textContent = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 4000); }
 
-        function openReportsModal() { document.getElementById('reportsModal').classList.remove('hidden'); window.location.hash = "reportsModal"; }
-        function closeReportsModal() { document.getElementById('reportsModal').classList.add('hidden'); history.pushState("", document.title, window.location.pathname + window.location.search); }
+        function openReportsModal() {
+            document.getElementById('reportsModal').classList.remove('hidden');
+            window.location.hash = "reportsModal";
+            toggleBodyScroll(true);
+        }
+        function closeReportsModal() {
+            document.getElementById('reportsModal').classList.add('hidden');
+            history.pushState("", document.title, window.location.pathname + window.location.search);
+            toggleBodyScroll(false);
+        }
+
+        function openSettingsModal() {
+            document.getElementById('settingsModal').classList.remove('hidden');
+            toggleBodyScroll(true);
+        }
+        function closeSettingsModal() {
+            document.getElementById('settingsModal').classList.add('hidden');
+            toggleBodyScroll(false);
+        }
 
         function openBinanceModal() {
             document.getElementById('binanceModal').classList.remove('hidden');
+            toggleBodyScroll(true);
             // تعيين تاريخ اليوم كافتراضي للفلتر إذا كان فارغاً
             const startDateInput = document.getElementById('binance_start_date');
             const endDateInput = document.getElementById('binance_end_date');
@@ -712,11 +852,11 @@ $transactions = $stmt->fetchAll();
             if (range.classList.contains('hidden')) {
                 range.classList.remove('hidden');
                 btn.classList.add('bg-yellow-500', 'text-black');
-                btn.classList.remove('bg-slate-800', 'text-slate-500');
+                btn.classList.remove('bg-slate-800', 'text-slate-400');
             } else {
                 range.classList.add('hidden');
                 btn.classList.remove('bg-yellow-500', 'text-black');
-                btn.classList.add('bg-slate-800', 'text-slate-500');
+                btn.classList.add('bg-slate-800', 'text-slate-400');
             }
         }
 
@@ -767,11 +907,35 @@ $transactions = $stmt->fetchAll();
         }
         function closeBinanceModal() {
             document.getElementById('binanceModal').classList.add('hidden');
+            toggleBodyScroll(false);
+        }
+
+        function toggleInstructions() {
+            const content = document.getElementById('instructions-content');
+            const icon = document.getElementById('instr-icon');
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                content.classList.add('hidden');
+                icon.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        function closeImportConfirmModal() {
+            document.getElementById('importConfirmModal').classList.add('hidden');
+            toggleBodyScroll(false);
+        }
+
+        function closeJsonModal() {
+            document.getElementById('jsonModal').classList.add('hidden');
+            toggleBodyScroll(false);
         }
 
         function showRawJson(data) {
             document.getElementById('json-display').textContent = JSON.stringify(data, null, 4);
             document.getElementById('jsonModal').classList.remove('hidden');
+            toggleBodyScroll(true);
             lucide.createIcons();
         }
 
@@ -842,23 +1006,38 @@ $transactions = $stmt->fetchAll();
             }
         }
 
-        function fetchBinanceOrders() {
+        function fetchBinanceOrders(isLoadMore = false) {
             const container = document.getElementById('binance-orders-container');
-            const startDate = document.getElementById('binance_start_date').value;
-            const endDate = document.getElementById('binance_end_date').value;
+            const loadMoreBtn = document.getElementById('binance-load-more-btn');
 
-            if (startDate && endDate) {
-                const diff = (new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24);
-                if (diff > 30) { alert("تنبيه: الحد الأقصى للنطاق الزمني هو 30 يوماً حسب قوانين بينانس."); return; }
+            if (isLoadMore && loadMoreBtn) {
+                loadMoreBtn.disabled = true;
+                loadMoreBtn.innerHTML = '<i data-lucide="loader" class="animate-spin w-4 h-4"></i> جاري التحميل...';
+                lucide.createIcons();
             }
 
-            container.innerHTML = '<div class="text-center py-10 text-slate-500 font-bold italic animate-pulse">جاري الاتصال بـ Binance API...</div>';
+            const startDate = document.getElementById('binance_start_date').value;
+            const endDate = document.getElementById('binance_end_date').value;
+            const startTime = document.getElementById('binance_start_time').value;
+            const endTime = document.getElementById('binance_end_time').value;
 
-            fetch(`fetch_binance_orders.php?start_date=${startDate}&end_date=${endDate}`)
+            let url = `fetch_binance_orders.php?start_date=${startDate}&end_date=${endDate}&start_time=${startTime}&end_time=${endTime}`;
+
+            if (isLoadMore && oldestBinanceTimestamp) {
+                // جلب 6 ساعات إضافية أقدم من آخر عملية
+                const newEnd = oldestBinanceTimestamp - 1000;
+                const newStart = newEnd - (6 * 60 * 60 * 1000);
+                url = `fetch_binance_orders.php?start_timestamp=${newStart}&end_timestamp=${newEnd}`;
+            } else {
+                container.innerHTML = '<div class="text-center py-10 text-slate-500 font-bold italic animate-pulse">جاري الاتصال بـ Binance API...</div>';
+            }
+
+            fetch(url)
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
-                    renderBinanceOrders(data.orders);
+                    if (data.oldest_timestamp) oldestBinanceTimestamp = data.oldest_timestamp;
+                    renderBinanceOrders(data.orders, isLoadMore);
                 } else {
                     container.innerHTML = `<div class="text-center py-10 text-rose-500 font-bold italic">${data.message}</div>`;
                 }
@@ -868,25 +1047,43 @@ $transactions = $stmt->fetchAll();
             });
         }
 
-        function renderBinanceOrders(orders) {
+        function renderBinanceOrders(orders, append = false) {
             const container = document.getElementById('binance-orders-container');
-            container.innerHTML = '';
-            hasPendingBuyOrders = false;
 
-            if (orders.length === 0) {
+            if (!append) {
+                container.innerHTML = '';
+                hasPendingBuyOrders = false;
+                totalRenderedBinanceOrders = 0;
+            } else {
+                // إزالة زر "عرض المزيد" القديم إن وجد
+                const oldLoadMore = document.getElementById('binance-load-more');
+                if (oldLoadMore) oldLoadMore.remove();
+            }
+
+            if (orders.length === 0 && !append) {
                 container.innerHTML = '<div class="text-center py-10 text-slate-500 font-bold italic">لا توجد عمليات حديثة لهذا التاريخ</div>';
                 return;
             }
 
-            // إضافة عداد إجمالي للعمليات المعروضة
-            const counterHtml = `
-                <div class="sticky top-0 z-20 flex justify-center mb-2 pointer-events-none">
-                    <span class="bg-slate-900/80 text-blue-400 px-4 py-1 rounded-full text-[9px] font-black border border-blue-500/20 backdrop-blur-md shadow-lg">
-                        عدد العمليات المعروضة: ${orders.length}
-                    </span>
-                </div>
-            `;
-            container.innerHTML = counterHtml;
+            // تحديث العداد
+            let currentCount = orders.length;
+            if (append) {
+                const badge = container.querySelector('.sticky span');
+                if (badge) {
+                    const prevCount = parseInt(badge.innerText.match(/\d+/)[0]);
+                    currentCount += prevCount;
+                    badge.innerText = `عدد العمليات المعروضة: ${currentCount}`;
+                }
+            } else {
+                const counterHtml = `
+                    <div class="sticky top-0 z-20 flex justify-center mb-2 pointer-events-none">
+                        <span class="bg-slate-900/80 text-blue-400 px-4 py-1 rounded-full text-[9px] font-black border border-blue-500/20 backdrop-blur-md shadow-lg">
+                            عدد العمليات المعروضة: ${orders.length}
+                        </span>
+                    </div>
+                `;
+                container.innerHTML = counterHtml;
+            }
 
             orders.forEach((order, index) => {
                 const isBuy = order.side === 'BUY';
@@ -925,7 +1122,7 @@ $transactions = $stmt->fetchAll();
                             </button>
                         </div>
                         <div class="absolute top-0 right-0">
-                            <span class="bg-slate-800 text-slate-500 px-2 py-1 rounded-bl-lg text-[9px] font-black tabular-nums border-b border-l border-slate-700 shadow-sm">${index + 1}</span>
+                            <span class="bg-slate-800 text-slate-500 px-2 py-1 rounded-bl-lg text-[9px] font-black tabular-nums border-b border-l border-slate-700 shadow-sm">${totalRenderedBinanceOrders + index + 1}</span>
                         </div>
 
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mt-2">
@@ -935,7 +1132,7 @@ $transactions = $stmt->fetchAll();
                                 <div class="flex flex-wrap items-center gap-2">
                                     <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase ${typeBg} tracking-widest">${typeLabel}</span>
                                     ${sourceBadge} ${statusBadge}
-                                    <span class="text-[8px] font-mono text-slate-500 bg-black/30 px-2 py-0.5 rounded border border-slate-800 tracking-tighter">#${order.orderNumber.toString().substring(0,10)}...</span>
+                                    <span class="text-[8px] font-mono text-slate-500 bg-black/30 px-2 py-0.5 rounded border border-slate-800 tracking-tighter">#${order.orderNumber.substring(0,10)}...</span>
                                 </div>
 
                                 <div class="bg-black/20 p-3 rounded-lg border border-white/5 space-y-1 w-full">
@@ -962,14 +1159,14 @@ $transactions = $stmt->fetchAll();
                             </div>
 
                             <!-- القسم الأيسر: الأزرار -->
-                            <div class="flex items-center gap-2 w-full md:w-auto justify-end">
+                            <div class="flex items-center gap-2 w-full md:w-auto justify-end" id="import-btn-container-${order.orderNumber}">
                                 ${isImported ?
                                     '<span class="bg-emerald-500/10 text-emerald-500 px-3 py-1.5 rounded-lg text-[9px] font-black flex items-center gap-1.5 border border-emerald-500/20"><i data-lucide="check-circle" class="w-3 h-3"></i> تم الإضافة</span>' :
                                     (!isCompleted ? '' : (isP2P ?
                                         `<button id="btn-import-${order.orderNumber}" onclick='quickImportOrder(${JSON.stringify(order)})' class="flex-grow md:flex-none bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black px-4 py-2 rounded-lg text-[9px] font-black transition-all border border-yellow-500/20 flex items-center justify-center gap-1.5 active:scale-95">
                                             <i data-lucide="zap" class="w-3 h-3"></i> إضافة سريعة
                                         </button>` :
-                                        `<button onclick='manualImportToForm(${JSON.stringify(order)})' class="flex-grow md:flex-none bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white px-4 py-2 rounded-lg text-[9px] font-black transition-all border border-blue-500/20 flex items-center justify-center gap-1.5 active:scale-95">
+                                        `<button id="btn-manual-${order.orderNumber}" onclick='manualImportToForm(${JSON.stringify(order)})' class="flex-grow md:flex-none bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white px-4 py-2 rounded-lg text-[9px] font-black transition-all border border-blue-500/20 flex items-center justify-center gap-1.5 active:scale-95">
                                             <i data-lucide="edit-3" class="w-3 h-3"></i> إدراج للنموذج
                                         </button>`
                                     ))
@@ -980,55 +1177,69 @@ $transactions = $stmt->fetchAll();
                 `;
                 container.innerHTML += card;
             });
+            totalRenderedBinanceOrders += orders.length;
+
+            // إضافة زر "عرض المزيد" في النهاية إذا كان هناك نتائج
+            if (orders.length > 0) {
+                const loadMoreBtn = `
+                    <div id="binance-load-more" class="p-4 text-center">
+                        <button id="binance-load-more-btn" onclick="fetchBinanceOrders(true)" class="bg-slate-800 hover:bg-slate-700 text-blue-400 px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-700 transition-all active:scale-95 flex items-center justify-center gap-2 mx-auto">
+                            <i data-lucide="chevron-down" class="w-4 h-4"></i> عرض عمليات أقدم (6 ساعات)
+                        </button>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', loadMoreBtn);
+            }
+
             lucide.createIcons();
         }
 
         function manualImportToForm(order) {
-            document.getElementById('enable_backdate').checked = true;
-            toggleDateInput();
+            const modal = document.getElementById('importConfirmModal');
+            toggleBodyScroll(true);
+            const submitBtn = document.getElementById('confirm-submit-btn');
 
-            // ضبط التاريخ
-            const dt = order.createTime.replace(" ", "T").substring(0, 16);
-            document.getElementById('manual_date').value = dt;
-
-            // حفظ رقم الطلب لمنع التكرار
-            document.getElementById('form_binance_order_id').value = order.orderNumber;
+            // إعادة تعيين حالة الزر (لحل مشكلة الدوران العالق)
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i data-lucide="plus-circle" class="w-4 h-4 inline ml-1"></i> إدراج وحفظ';
 
             const type = order.side === 'BUY' ? 'buy' : 'sell';
-            document.getElementById('typeSelect').value = type;
-
             const fee = parseFloat(order.binance_fee || 0);
             let amount = parseFloat(order.amount);
 
-            // تصحيح الكمية: في الشراء فقط، الكمية الصافية للمخزون هي المبلغ ناقص الرسوم
-            // في البيع والسحب، الكمية التي تخرج من المحفظة هي المبلغ المكتوب في بينانس
+            // تصحيح الكمية
+            if (type === 'buy') amount = amount - fee;
+
+            // تعبئة بيانات النافذة
+            document.getElementById('confirm_order_id').value = order.orderNumber;
+            document.getElementById('confirm_type').value = type;
+            document.getElementById('confirm_date').value = order.createTime;
+            document.getElementById('confirm_amount').value = amount.toFixed(8);
+
+            document.getElementById('display_type').innerText = (type === 'buy' ? 'شراء' : 'بيع');
+            document.getElementById('display_type').className = `text-sm font-black uppercase ${type === 'buy' ? 'text-emerald-500' : 'text-rose-500'}`;
+            document.getElementById('confirm_amount').value = amount.toFixed(4);
+
+            document.getElementById('confirm_price').value = (type === 'buy' ? BUY_PRICE_DEF : SELL_PRICE_DEF);
+            document.getElementById('confirm_binance_fee').value = fee;
+
+            // حساب رسوم صراف افتراضية للشراء
+            let manualFee = 0;
             if (type === 'buy') {
-                amount = amount - fee;
+                const grossYER = amount * BUY_PRICE_DEF;
+                if (grossYER > 300000) manualFee = 200;
+                else if (grossYER > 90000) manualFee = 50;
             }
+            document.getElementById('confirm_manual_fee').value = manualFee;
+            document.getElementById('confirmManualFeeContainer').style.display = (type === 'sell' ? 'none' : 'block');
 
-            document.getElementById('crypto_amount_input').value = amount.toFixed(8);
-
-            // لعمليات Pay و Withdraw، السعر غالباً غير معروف، نترك للمستخدم إدخاله
-            document.getElementById('priceInput').value = type === 'buy' ? BUY_PRICE_DEF : SELL_PRICE_DEF;
-            document.getElementById('manual_fiat_fee').value = 0;
-            document.getElementById('binance_fee_input').dataset.manualModified = 'true';
-            document.getElementById('manual_fiat_fee').dataset.manualModified = 'true';
-
-            if (order.binance_fee !== undefined && order.binance_fee !== null) {
-                document.getElementById('binance_fee_input').value = fee;
-            }
-
-            handleTypeChange();
-            updateCalculations();
-            closeBinanceModal();
-
-            document.getElementById('form-section').scrollIntoView({ behavior: 'smooth' });
-            showToast("تم إدراج البيانات، يرجى مراجعة السعر والرسوم ثم الحفظ");
+            modal.classList.remove('hidden');
+            lucide.createIcons();
         }
 
         function quickImportOrder(order) {
             const btn = document.getElementById(`btn-import-${order.orderNumber}`);
-            if(btn.disabled) return;
+            if(!btn || btn.disabled) return;
 
             btn.disabled = true;
             btn.innerHTML = '<i data-lucide="loader" class="animate-spin w-3 h-3"></i>';
@@ -1070,8 +1281,13 @@ $transactions = $stmt->fetchAll();
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
-                    btn.className = "mt-2 bg-emerald-500/20 text-emerald-500 px-4 py-2 rounded text-[10px] font-black border border-emerald-500/20";
-                    btn.innerHTML = '<i data-lucide="check" class="w-3 h-3 inline"></i> تمت الإضافة';
+                    const container = document.getElementById(`import-btn-container-${order.orderNumber}`);
+                    if (container) {
+                        container.innerHTML = '<span class="bg-emerald-500/10 text-emerald-500 px-3 py-1.5 rounded-lg text-[9px] font-black flex items-center gap-1.5 border border-emerald-500/20"><i data-lucide="check-circle" class="w-3 h-3"></i> تم الإضافة</span>';
+                    } else {
+                        btn.className = "mt-2 bg-emerald-500/20 text-emerald-500 px-4 py-2 rounded text-[10px] font-black border border-emerald-500/20";
+                        btn.innerHTML = '<i data-lucide="check" class="w-3 h-3 inline"></i> تمت الإضافة';
+                    }
                     lucide.createIcons();
                     showToast("تم إضافة العملية بنجاح!");
                 } else {
@@ -1089,8 +1305,79 @@ $transactions = $stmt->fetchAll();
             });
         }
 
-        function openProfitCalculator() { document.getElementById('profitCalcModal').classList.remove('hidden'); }
-        function closeProfitCalculator() { document.getElementById('profitCalcModal').classList.add('hidden'); }
+        function openProfitCalculator() {
+            document.getElementById('profitCalcModal').classList.remove('hidden');
+            updateSimulation();
+            toggleBodyScroll(true);
+        }
+        function closeProfitCalculator() {
+            document.getElementById('profitCalcModal').classList.add('hidden');
+            toggleBodyScroll(false);
+        }
+
+        const fifoLayers = <?php echo json_encode($all_active_layers); ?>;
+
+        function setSimPrice(price) {
+            document.getElementById('sim_price').value = price;
+            updateSimulation();
+        }
+
+        function updateSimulation() {
+            const simPrice = parseFloat(document.getElementById('sim_price').value) || 0;
+            const container = document.getElementById('sim_layers_container');
+            const totalProfitDisplay = document.getElementById('sim_total_profit');
+            const totalUsdDisplay = document.getElementById('sim_total_usd');
+
+            let totalProfitYER = 0;
+            container.innerHTML = '';
+
+            if (fifoLayers.length === 0) {
+                container.innerHTML = '<div class="text-center py-10 text-slate-500 font-bold italic">لا يوجد مخزون متاح حالياً للمحاكاة.</div>';
+                totalProfitDisplay.innerText = "0 YER";
+                totalUsdDisplay.innerText = "$0.00";
+                return;
+            }
+
+            fifoLayers.forEach((layer, index) => {
+                const qty = parseFloat(layer.remaining_qty);
+                const cost = parseFloat(layer.unit_cost);
+
+                // حساب الربح لهذه الطبقة: (سعر البيع - سعر التكلفة) * الكمية
+                // مع مراعاة عمولة بينانس 0.1% عند البيع
+                const revenue = qty * simPrice;
+                const layerCostTotal = qty * cost * 1.001; // إضافة 0.1% كتغطية لرسوم بينانس
+                const profit = revenue - layerCostTotal;
+
+                totalProfitYER += profit;
+
+                const card = `
+                    <div class="bg-slate-900/40 p-4 rounded-xl border border-slate-800/50 flex justify-between items-center group hover:border-blue-500/30 transition-all">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-[10px] font-black text-slate-500 group-hover:text-blue-400 transition-colors">
+                                ${index + 1}
+                            </div>
+                            <div>
+                                <p class="text-xs font-black text-white tabular-nums">${qty.toFixed(2)} <span class="text-[9px] opacity-40 uppercase">USDT</span></p>
+                                <p class="text-[9px] text-slate-500 font-bold italic">تكلفة الطبقة: ${cost.toFixed(1)} YER</p>
+                            </div>
+                        </div>
+                        <div class="text-left">
+                            <p class="text-sm font-black ${profit >= 0 ? 'text-emerald-500' : 'text-rose-500'} tabular-nums">
+                                ${profit >= 0 ? '+' : ''}${Math.round(profit).toLocaleString()} <span class="text-[9px] opacity-50">YER</span>
+                            </p>
+                            <p class="text-[9px] text-slate-500 font-bold italic">صافي ربح الطبقة</p>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', card);
+            });
+
+            totalProfitDisplay.innerText = `${Math.round(totalProfitYER).toLocaleString()} YER`;
+            const profitUSD = simPrice > 0 ? (totalProfitYER / simPrice) : 0;
+            totalUsdDisplay.innerText = `$${profitUSD.toFixed(2)}`;
+
+            totalProfitDisplay.className = `text-3xl font-black tabular-nums text-center ${totalProfitYER >= 0 ? 'text-emerald-500' : 'text-rose-500'}`;
+        }
 
         function saveMainFormState() {
             localStorage.setItem('enable_backdate', document.getElementById('enable_backdate').checked);
@@ -1130,6 +1417,46 @@ $transactions = $stmt->fetchAll();
             if (window.location.hash === "#form-section") { document.getElementById('form-section').scrollIntoView({ behavior: 'smooth' }); }
             if (window.location.hash === "#reportsModal") { document.getElementById('reportsModal').classList.remove('hidden'); }
         }
+
+        const importConfirmForm = document.getElementById('import-confirm-form');
+        importConfirmForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const btn = document.getElementById('confirm-submit-btn');
+            const orderId = document.getElementById('confirm_order_id').value;
+
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader" class="animate-spin w-4 h-4"></i>';
+            lucide.createIcons();
+
+            fetch('process.php', { method: 'POST', body: new FormData(this) })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast("تم إدراج العملية بنجاح!");
+                    document.getElementById('importConfirmModal').classList.add('hidden');
+                    toggleBodyScroll(false);
+
+                    // تحديث زر العملية في قائمة بينانس باستخدام الـ Container ID الجديد
+                    const container = document.getElementById(`import-btn-container-${orderId}`);
+
+                    if (container) {
+                        container.innerHTML = '<span class="bg-emerald-500/10 text-emerald-500 px-3 py-1.5 rounded-lg text-[9px] font-black flex items-center gap-1.5 border border-emerald-500/20"><i data-lucide="check-circle" class="w-3 h-3"></i> تم الإضافة</span>';
+                        lucide.createIcons();
+                    }
+                } else {
+                    alert(data.message);
+                    btn.disabled = false;
+                    btn.innerHTML = '<i data-lucide="plus-circle" class="w-4 h-4 inline ml-1"></i> إدراج وحفظ';
+                    lucide.createIcons();
+                }
+            })
+            .catch(err => {
+                alert("حدث خطأ تقني");
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="plus-circle" class="w-4 h-4 inline ml-1"></i> إدراج وحفظ';
+                lucide.createIcons();
+            });
+        });
 
         const ajaxForm = document.getElementById('ajax-form');
         ajaxForm.addEventListener('submit', function(e) {
@@ -1258,8 +1585,15 @@ $transactions = $stmt->fetchAll();
             }
         }
 
+        function closeEditModal() {
+            document.getElementById('editModal').classList.add('hidden');
+            toggleBodyScroll(false);
+        }
+
         function openEditModal(data) {
+            toggleBodyScroll(true);
             document.getElementById('edit_id').value = data.id;
+            document.getElementById('edit_binance_order_id').value = data.binance_order_id || "";
 
             document.getElementById('edit_type').value = data.type;
             document.getElementById('edit_amount').value = data.crypto_amount;
