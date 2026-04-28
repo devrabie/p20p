@@ -42,24 +42,28 @@ $total_profit_usd_all = ($def_buy > 0) ? ($total_profit_yer_all / $def_buy) : 0;
 // جلب النطاق الزمني المختار (الافتراضي هو 'day')
 $range = $_GET['range'] ?? 'day';
 
-// تحديد نطاق التاريخ للاستعلامات
-$date_condition = "DATE(created_at) = ?";
-$date_params = [$today];
+// تحديد نطاق التاريخ للاستعلامات باستخدام نطاقات زمنية (Range) لتحسين استخدام الفهارس
 $range_label = "اليوم";
+$start_ts = $today . ' 00:00:00';
+$end_ts = $today . ' 23:59:59';
 
 if ($range === 'yesterday') {
     $yesterday = date('Y-m-d', strtotime('-1 day'));
-    $date_params = [$yesterday];
+    $start_ts = $yesterday . ' 00:00:00';
+    $end_ts = $yesterday . ' 23:59:59';
     $range_label = "الأمس";
 } else if ($range === 'week') {
-    $date_condition = "DATE(created_at) >= ?";
-    $date_params = [date('Y-m-d', strtotime('-6 days'))];
+    $start_ts = date('Y-m-d', strtotime('-6 days')) . ' 00:00:00';
+    $end_ts = $today . ' 23:59:59';
     $range_label = "آخر 7 أيام";
 } else if ($range === 'month') {
-    $date_condition = "DATE(created_at) >= ?";
-    $date_params = [date('Y-m-d', strtotime('-29 days'))];
+    $start_ts = date('Y-m-d', strtotime('-29 days')) . ' 00:00:00';
+    $end_ts = $today . ' 23:59:59';
     $range_label = "آخر 30 يوم";
 }
+
+$date_condition = "created_at >= ? AND created_at <= ?";
+$date_params = [$start_ts, $end_ts];
 
 // ب. حساب حجم التداول للنطاق المختار (Volume)
 $daily_buy_vol_stmt = $pdo->prepare("SELECT SUM(crypto_amount) FROM transactions WHERE user_id = ? AND type = 'buy' AND $date_condition");
@@ -107,8 +111,8 @@ $cumulative_profit = 0;
 
 if ($range === 'day') {
     // وضع اليوم: عمليات البيع لهذا اليوم مرتبة زمنياً (بحد أقصى 50 عملية)
-    $stmt = $pdo->prepare("SELECT created_at, fifo_profit as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) = ? ORDER BY id ASC LIMIT 50");
-    $stmt->execute([$user_id, $today]);
+    $stmt = $pdo->prepare("SELECT created_at, fifo_profit as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' AND created_at >= ? AND created_at <= ? ORDER BY id ASC LIMIT 50");
+    $stmt->execute([$user_id, $today . ' 00:00:00', $today . ' 23:59:59']);
     $data_rows = $stmt->fetchAll();
     
     foreach ($data_rows as $data) {
@@ -130,8 +134,8 @@ if ($range === 'day') {
 } else if ($range === 'yesterday') {
     // وضع الأمس: عمليات البيع للأمس مرتبة زمنياً
     $yesterday = date('Y-m-d', strtotime('-1 day'));
-    $stmt = $pdo->prepare("SELECT created_at, fifo_profit as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) = ? ORDER BY id ASC LIMIT 50");
-    $stmt->execute([$user_id, $yesterday]);
+    $stmt = $pdo->prepare("SELECT created_at, fifo_profit as op_profit FROM transactions WHERE user_id = ? AND type = 'sell' AND created_at >= ? AND created_at <= ? ORDER BY id ASC LIMIT 50");
+    $stmt->execute([$user_id, $yesterday . ' 00:00:00', $yesterday . ' 23:59:59']);
     $data_rows = $stmt->fetchAll();
 
     foreach ($data_rows as $data) {
@@ -149,8 +153,8 @@ if ($range === 'day') {
         $current_d = date('Y-m-d', strtotime("-$i days"));
         $chart_labels[] = date('m-d', strtotime($current_d));
         
-        $day_stmt = $pdo->prepare("SELECT SUM(fifo_profit) FROM transactions WHERE user_id = ? AND type = 'sell' AND DATE(created_at) = ?");
-        $day_stmt->execute([$user_id, $current_d]);
+        $day_stmt = $pdo->prepare("SELECT SUM(fifo_profit) FROM transactions WHERE user_id = ? AND type = 'sell' AND created_at >= ? AND created_at <= ?");
+        $day_stmt->execute([$user_id, $current_d . ' 00:00:00', $current_d . ' 23:59:59']);
         $day_val = (float)($day_stmt->fetchColumn() ?: 0);
         
         $cumulative_profit += $day_val;

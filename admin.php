@@ -30,7 +30,12 @@ if (!$user || $user['role'] !== 'admin') {
     die("عذراً، لا تملك صلاحية الوصول لهذه الصفحة.");
 }
 
-// 2. التحقق من كلمة المرور الثانوية
+// 2. نظام الـ CSRF للحماية
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+// 3. التحقق من كلمة المرور الثانوية
 $admin_secondary_pass = getenv('ADMIN_SECONDARY_PASSWORD') ?: '123456';
 
 if (isset($_POST['secondary_password'])) {
@@ -73,11 +78,16 @@ if (!isset($_SESSION['admin_verified']) || $_SESSION['admin_verified'] !== true)
     exit();
 }
 
-// 3. معالجة الإجراءات الإدارية
-if (isset($_GET['action'])) {
-    $target_id = $_GET['user_id'] ?? null;
+// 4. معالجة الإجراءات الإدارية (عبر POST للحماية من CSRF)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    // التحقق من التوكن
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        die("خطأ في التحقق من صحة الطلب (CSRF).");
+    }
 
-    if ($_GET['action'] === 'toggle_status' && $target_id) {
+    $target_id = $_POST['user_id'] ?? null;
+
+    if ($_POST['action'] === 'toggle_status' && $target_id) {
         $stmt = $pdo->prepare("SELECT status FROM users WHERE id = ?");
         $stmt->execute([$target_id]);
         $current_status = $stmt->fetchColumn();
@@ -89,7 +99,7 @@ if (isset($_GET['action'])) {
         exit();
     }
 
-    if ($_GET['action'] === 'delete' && $target_id) {
+    if ($_POST['action'] === 'delete' && $target_id) {
         // حماية: لا يمكن حذف المدير
         $stmt = $pdo->prepare("DELETE FROM users WHERE id = ? AND role != 'admin'");
         $stmt->execute([$target_id]);
@@ -97,7 +107,7 @@ if (isset($_GET['action'])) {
         exit();
     }
 
-    if ($_GET['action'] === 'login_as' && $target_id) {
+    if ($_POST['action'] === 'login_as' && $target_id) {
         // حفظ معرف المدير الحالي للعودة لاحقاً
         $_SESSION['admin_user_id'] = $_SESSION['user_id'];
         $_SESSION['user_id'] = $target_id;
@@ -240,15 +250,32 @@ $users_list = $pdo->query($users_query)->fetchAll();
                             <td class="p-4">
                                 <div class="flex items-center justify-end gap-2">
                                     <?php if($u['role'] !== 'admin'): ?>
-                                        <a href="admin.php?action=login_as&user_id=<?php echo $u['id']; ?>" class="bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white p-2 rounded-lg transition-all" title="دخول كمسؤول للمستخدم">
-                                            <i data-lucide="eye" class="w-4 h-4"></i>
-                                        </a>
-                                        <a href="admin.php?action=toggle_status&user_id=<?php echo $u['id']; ?>" class="bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black p-2 rounded-lg transition-all" title="<?php echo $u['status'] === 'active' ? 'تجميد' : 'إلغاء تجميد'; ?>">
-                                            <i data-lucide="<?php echo $u['status'] === 'active' ? 'user-x' : 'user-check'; ?>" class="w-4 h-4"></i>
-                                        </a>
-                                        <a href="admin.php?action=delete&user_id=<?php echo $u['id']; ?>" onclick="return confirm('هل أنت متأكد من حذف هذا الحساب نهائياً؟ لن تتمكن من التراجع!')" class="bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white p-2 rounded-lg transition-all" title="حذف نهائي">
-                                            <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                        </a>
+                                        <form method="POST" class="inline">
+                                            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                                            <input type="hidden" name="user_id" value="<?php echo $u['id']; ?>">
+                                            <input type="hidden" name="action" value="login_as">
+                                            <button type="submit" class="bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white p-2 rounded-lg transition-all" title="دخول كمسؤول للمستخدم">
+                                                <i data-lucide="eye" class="w-4 h-4"></i>
+                                            </button>
+                                        </form>
+
+                                        <form method="POST" class="inline">
+                                            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                                            <input type="hidden" name="user_id" value="<?php echo $u['id']; ?>">
+                                            <input type="hidden" name="action" value="toggle_status">
+                                            <button type="submit" class="bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black p-2 rounded-lg transition-all" title="<?php echo $u['status'] === 'active' ? 'تجميد' : 'إلغاء تجميد'; ?>">
+                                                <i data-lucide="<?php echo $u['status'] === 'active' ? 'user-x' : 'user-check'; ?>" class="w-4 h-4"></i>
+                                            </button>
+                                        </form>
+
+                                        <form method="POST" class="inline" onsubmit="return confirm('هل أنت متأكد من حذف هذا الحساب نهائياً؟ لن تتمكن من التراجع!')">
+                                            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                                            <input type="hidden" name="user_id" value="<?php echo $u['id']; ?>">
+                                            <input type="hidden" name="action" value="delete">
+                                            <button type="submit" class="bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white p-2 rounded-lg transition-all" title="حذف نهائي">
+                                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                            </button>
+                                        </form>
                                     <?php else: ?>
                                         <span class="text-[10px] text-slate-600 font-bold italic">لا توجد إجراءات</span>
                                     <?php endif; ?>
