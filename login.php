@@ -25,16 +25,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // التحقق من صحة كلمة المرور المشفرة
         if ($user && password_verify($password, $user['password'])) {
             // التحقق من حالة الحساب
-            if ($user['status'] === 'frozen') {
+            if (isset($user['status']) && $user['status'] === 'frozen') {
                 $error = "عذراً، هذا الحساب مجمد حالياً. يرجى التواصل مع الإدارة.";
             } else {
                 // تسجيل البيانات في الجلسة (Session)
                 $_SESSION['user_id'] = $user['id'];
-            $_SESSION['username'] = $user['username'];
+                $_SESSION['username'] = $user['username'];
 
-            // التوجه للوحة التحكم
-            header("Location: index.php");
-            exit();
+                // التوجه للوحة التحكم
+                header("Location: index.php");
+                exit();
+            }
         } else {
             $error = "خطأ في اسم المستخدم أو كلمة المرور!";
         }
