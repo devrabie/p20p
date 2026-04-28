@@ -95,19 +95,20 @@ function getFIFOStock($pdo, $user_id) {
 }
 
 /**
- * جلب معلومات طبقة الشراء القادمة للمستشار الذكي
+ * جلب طبقات الشراء الحالية والمتوفرة (نظام FIFO)
  */
-function getNextFIFOLayer($pdo, $user_id) {
-    $stmt = $pdo->prepare("SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at ASC, id ASC");
+function getFIFOLayers($pdo, $user_id, $limit = 2) {
+    $stmt = $pdo->prepare("SELECT id, type, crypto_amount, total_fiat_paid, total_crypto_deducted FROM transactions WHERE user_id = ? ORDER BY created_at ASC, id ASC");
     $stmt->execute([$user_id]);
     $transactions = $stmt->fetchAll();
 
     $buy_queue = [];
     foreach ($transactions as $tx) {
         if ($tx['type'] == 'buy') {
+            $net_qty = round(floatval($tx['crypto_amount']), 4);
             $buy_queue[] = [
-                'remaining_qty' => round(floatval($tx['crypto_amount']), 4),
-                'unit_cost' => ($tx['crypto_amount'] > 0) ? ($tx['total_fiat_paid'] / $tx['crypto_amount']) : 0
+                'remaining_qty' => $net_qty,
+                'unit_cost' => ($net_qty > 0) ? ($tx['total_fiat_paid'] / $net_qty) : 0
             ];
         } else if ($tx['type'] == 'sell') {
             $remaining_to_match = round(floatval($tx['total_crypto_deducted']), 4);
@@ -122,5 +123,14 @@ function getNextFIFOLayer($pdo, $user_id) {
             }
         }
     }
-    return count($buy_queue) > 0 ? $buy_queue[0] : null;
+
+    return array_slice($buy_queue, 0, $limit);
+}
+
+/**
+ * جلب معلومات طبقة الشراء القادمة للمستشار الذكي (للتوافق)
+ */
+function getNextFIFOLayer($pdo, $user_id) {
+    $layers = getFIFOLayers($pdo, $user_id, 1);
+    return !empty($layers) ? $layers[0] : null;
 }

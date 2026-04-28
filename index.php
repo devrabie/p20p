@@ -83,15 +83,9 @@ $daily_out_money_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid) FROM transact
 $daily_out_money_stmt->execute(array_merge([$user_id], $date_params));
 $daily_out_money = $daily_out_money_stmt->fetchColumn() ?: 0;
 
-// د. حساب المخزون المتوفر (Stock)
-$total_in = $pdo->prepare("SELECT SUM(crypto_amount) FROM transactions WHERE user_id = ? AND type='buy'");
-$total_in->execute([$user_id]);
-$sum_in = $total_in->fetchColumn() ?: 0;
-
-$total_out = $pdo->prepare("SELECT SUM(total_crypto_deducted) FROM transactions WHERE user_id = ? AND type='sell'");
-$total_out->execute([$user_id]);
-$sum_out = $total_out->fetchColumn() ?: 0;
-$remaining_stock = $sum_in - $sum_out;
+// د. حساب المخزون المتوفر (Stock) والطبقات
+$remaining_stock = getFIFOStock($pdo, $user_id);
+$current_layers = getFIFOLayers($pdo, $user_id, 2);
 
 // هـ. حسابات النطاق المختار (أرباح ورسوم) بدقة بناءً على FIFO
 $daily_profit_stmt = $pdo->prepare("SELECT SUM(fifo_profit) FROM transactions WHERE user_id = ? AND type = 'sell' AND $date_condition");
@@ -262,7 +256,7 @@ $transactions = $stmt->fetchAll();
 
         <!-- الشريط الذكي (Smart Banner) -->
         <?php
-        $next_layer = getNextFIFOLayer($pdo, $user_id);
+        $next_layer = $current_layers[0] ?? null;
         if($next_layer):
             $layer_cost = $next_layer['unit_cost'];
             $break_even_price = $layer_cost * 1.001;
@@ -336,7 +330,26 @@ $transactions = $stmt->fetchAll();
             <div class="glass-card p-5 border-r-4 border-yellow-500 shadow-xl">
                 <span class="text-slate-400 text-[10px] font-bold block mb-1 uppercase italic tracking-tighter">المخزون المتوفر (Stock)</span>
                 <h3 class="text-lg md:text-xl font-black text-yellow-500 tabular-nums"><?php echo number_format($remaining_stock, 2); ?></h3>
-                <p class="text-[9px] text-slate-500 font-bold mt-1">تكلفة الطبقة الحالية: <?php echo number_format($layer_cost ?? 0, 1); ?></p>
+
+                <div class="mt-2 space-y-1">
+                    <?php if(!empty($current_layers[0])): ?>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[8px] bg-yellow-500/10 text-yellow-500 px-1 rounded font-black">الآن</span>
+                            <p class="text-[9px] text-slate-400 font-bold italic">
+                                <?php echo number_format($current_layers[0]['remaining_qty'], 2); ?> USDT @ <span class="text-white"><?php echo number_format($current_layers[0]['unit_cost'], 1); ?></span>
+                            </p>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if(!empty($current_layers[1])): ?>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[8px] bg-blue-500/10 text-blue-400 px-1 rounded font-black">التالية</span>
+                            <p class="text-[9px] text-slate-500 font-bold italic">
+                                <?php echo number_format($current_layers[1]['remaining_qty'], 2); ?> USDT @ <span class="text-slate-400"><?php echo number_format($current_layers[1]['unit_cost'], 1); ?></span>
+                            </p>
+                        </div>
+                    <?php endif; ?>
+                </div>
             </div>
             <div class="glass-card p-5 bg-blue-500/10 border border-blue-500/20">
                 <span class="text-[9px] text-blue-500 font-black uppercase mb-1 block">ربح اليوم</span>
