@@ -721,27 +721,29 @@ $transactions = $stmt->fetchAll();
             </div>
 
             <div class="flex flex-col gap-2 mb-3">
-                <!-- الملاح الزمني -->
-                <div class="flex items-center justify-between bg-slate-900/60 border border-slate-800 rounded-lg p-1 overflow-hidden">
-                    <button onclick="navigateBinanceDate(-1)" class="flex items-center gap-1.5 px-3 py-2 text-slate-400 hover:text-yellow-500 transition-all active:scale-90 group">
-                         <span class="text-[9px] font-black">السابق</span> <i data-lucide="chevron-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
+                <!-- شريط التحكم المدمج -->
+                <div class="flex items-center gap-1 bg-slate-900/60 border border-slate-800 rounded-xl p-1 overflow-hidden">
+                    <!-- التنقل للسابق -->
+                    <button onclick="navigateBinanceDate(-1)" class="p-2 text-slate-500 hover:text-yellow-500 transition-all active:scale-90" title="اليوم السابق">
+                        <i data-lucide="chevron-right" class="w-5 h-5"></i>
                     </button>
 
-                    <div class="flex flex-col items-center flex-grow px-2">
-                        <div id="binance_date_label" class="text-[10px] font-black text-yellow-500 tabular-nums">اليوم</div>
-                        <div id="binance_date_val" class="text-[9px] text-slate-500 font-bold tabular-nums">----/--/--</div>
+                    <!-- معلومات التاريخ واليوم -->
+                    <div class="flex-grow flex flex-col items-center justify-center px-1 border-x border-slate-800/50 cursor-pointer hover:bg-white/5 transition-all rounded-md" onclick="setBinanceToday()" title="العودة لليوم">
+                        <div id="binance_date_label" class="text-[9px] font-black text-yellow-500 tabular-nums uppercase leading-none mb-0.5">اليوم</div>
+                        <div id="binance_date_val" class="text-[8px] text-slate-500 font-bold tabular-nums leading-none">----/--/--</div>
                     </div>
 
-                    <button onclick="navigateBinanceDate(1)" class="flex items-center gap-1.5 px-3 py-2 text-slate-400 hover:text-yellow-500 transition-all active:scale-90 group">
-                        <i data-lucide="chevron-left" class="w-4 h-4 group-hover:-translate-x-1 transition-transform"></i> <span class="text-[9px] font-black">التالي</span>
+                    <!-- التنقل للتالي -->
+                    <button onclick="navigateBinanceDate(1)" class="p-2 text-slate-500 hover:text-yellow-500 transition-all active:scale-90" title="اليوم التالي">
+                        <i data-lucide="chevron-left" class="w-5 h-5"></i>
                     </button>
-                </div>
 
-                <div class="flex gap-2">
-                    <button onclick="setBinanceToday()" class="flex-1 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 py-2 rounded-lg text-[9px] font-black border border-yellow-500/20 transition-all flex items-center justify-center gap-2">
-                        <i data-lucide="calendar-check" class="w-3.5 h-3.5"></i> عرض عمليات اليوم
-                    </button>
-                    <button onclick="toggleBinanceManualDate()" id="btn-manual-date" class="px-3 bg-slate-800 text-slate-500 hover:text-white rounded-lg text-[9px] font-black border border-slate-700 transition-colors" title="تحديد نطاق مخصص">
+                    <!-- فاصل عمودي -->
+                    <div class="w-px h-6 bg-slate-800 mx-1"></div>
+
+                    <!-- زر الفلترة المخصص -->
+                    <button onclick="toggleBinanceManualDate()" id="btn-manual-date" class="p-2.5 bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-all" title="تحديد نطاق تاريخ مخصص">
                         <i data-lucide="calendar-range" class="w-4 h-4"></i>
                     </button>
                 </div>
@@ -817,11 +819,11 @@ $transactions = $stmt->fetchAll();
             if (range.classList.contains('hidden')) {
                 range.classList.remove('hidden');
                 btn.classList.add('bg-yellow-500', 'text-black');
-                btn.classList.remove('bg-slate-800', 'text-slate-500');
+                btn.classList.remove('bg-slate-800', 'text-slate-400');
             } else {
                 range.classList.add('hidden');
                 btn.classList.remove('bg-yellow-500', 'text-black');
-                btn.classList.add('bg-slate-800', 'text-slate-500');
+                btn.classList.add('bg-slate-800', 'text-slate-400');
             }
         }
 
