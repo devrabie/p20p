@@ -217,7 +217,14 @@ $transactions = $stmt->fetchAll();
             <div class="w-8 h-8 md:w-10 md:h-10 bg-yellow-500/10 rounded-full flex items-center justify-center border border-yellow-500/20 group-hover:scale-110 transition"><i data-lucide="user-lock" class="w-4 h-4 md:w-6 md:h-6 text-yellow-500"></i></div>
             <div class="flex flex-col text-right"><span class="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase italic">حساب التاجر</span><span class="text-xs md:text-sm font-black text-white"><?php echo htmlspecialchars($username); ?></span></div>
         </div>
-        <a href="logout.php" onclick="return confirm('خروج؟')" class="flex items-center gap-2 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white px-3 md:px-5 py-2 rounded text-[10px] md:text-xs font-black border border-rose-500/20 transition-all"><span>خروج آمن</span> <i data-lucide="log-out" class="w-3.5 h-3.5 md:w-4 md:h-4"></i></a>
+        <div class="flex items-center gap-3">
+            <?php if(isset($_SESSION['admin_user_id'])): ?>
+                <a href="admin.php?action=return_to_admin" class="flex items-center gap-2 bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white px-3 md:px-5 py-2 rounded text-[10px] md:text-xs font-black border border-blue-500/20 transition-all">
+                    <i data-lucide="undo-2" class="w-3.5 h-3.5"></i> العودة للإدارة
+                </a>
+            <?php endif; ?>
+            <a href="logout.php" onclick="return confirm('خروج؟')" class="flex items-center gap-2 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white px-3 md:px-5 py-2 rounded text-[10px] md:text-xs font-black border border-rose-500/20 transition-all"><span>خروج آمن</span> <i data-lucide="log-out" class="w-3.5 h-3.5 md:w-4 md:h-4"></i></a>
+        </div>
     </nav>
 
     <div class="max-w-6xl mx-auto">
