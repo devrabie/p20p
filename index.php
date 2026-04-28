@@ -690,16 +690,22 @@ $transactions = $stmt->fetchAll();
                 <button onclick="closeBinanceModal()" class="bg-slate-800 p-1.5 rounded-lg text-white hover:bg-rose-500 transition"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
             </div>
 
-            <!-- شريط التعليمات -->
-            <div class="bg-blue-500/10 border border-blue-500/20 p-3 rounded-lg mb-3 flex items-start gap-3">
-                <i data-lucide="info" class="w-5 h-5 text-blue-400 shrink-0 mt-0.5"></i>
-                <div class="text-[10px] text-slate-300 leading-relaxed font-bold">
-                    <p class="text-blue-400 font-black uppercase mb-1">تعليمات هامة للدقة المحاسبية:</p>
-                    <ul class="list-disc list-inside space-y-1">
-                        <li>يرجى إدراج العمليات <span class="text-yellow-500 underline decoration-yellow-500/30">الأقدم أولاً</span> لضمان حساب الأرباح والمخزون بدقة (نظام FIFO).</li>
-                        <li>استخدم الفلترة بالوقت في الأسفل للوصول للعمليات المفقودة في أوقات الذروة.</li>
-                        <li>العمليات المضافة مسبقاً تظهر باللون الباهت مع علامة صح خضراء.</li>
-                    </ul>
+            <!-- شريط التعليمات المطوي -->
+            <div class="mb-3">
+                <button onclick="toggleInstructions()" class="w-full flex items-center justify-between bg-blue-500/10 border border-blue-500/20 p-2.5 rounded-lg text-blue-400 hover:bg-blue-500/20 transition-all">
+                    <div class="flex items-center gap-2 text-[10px] font-black uppercase italic">
+                        <i data-lucide="info" class="w-3.5 h-3.5"></i> تعليمات الاستخدام والدقة المحاسبية
+                    </div>
+                    <i data-lucide="chevron-down" id="instr-icon" class="w-4 h-4 transition-transform duration-300"></i>
+                </button>
+                <div id="instructions-content" class="hidden overflow-hidden bg-blue-500/5 border-x border-b border-blue-500/20 rounded-b-lg p-3 mx-1">
+                    <div class="text-[10px] text-slate-300 leading-relaxed font-bold">
+                        <ul class="list-disc list-inside space-y-1.5">
+                            <li>يرجى إدراج العمليات <span class="text-yellow-500 underline decoration-yellow-500/30">الأقدم أولاً</span> لضمان حساب الأرباح والمخزون بدقة (نظام FIFO).</li>
+                            <li>استخدم الفلترة بالوقت في الأسفل للوصول للعمليات المفقودة في أوقات الذروة.</li>
+                            <li>العمليات المضافة مسبقاً تظهر باللون الباهت مع علامة صح خضراء.</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
 
@@ -855,6 +861,18 @@ $transactions = $stmt->fetchAll();
         }
         function closeBinanceModal() {
             document.getElementById('binanceModal').classList.add('hidden');
+        }
+
+        function toggleInstructions() {
+            const content = document.getElementById('instructions-content');
+            const icon = document.getElementById('instr-icon');
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                content.classList.add('hidden');
+                icon.style.transform = 'rotate(0deg)';
+            }
         }
 
         function showRawJson(data) {
