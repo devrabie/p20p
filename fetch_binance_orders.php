@@ -37,12 +37,17 @@ try {
     $startTimestamp = null;
     $endTimestamp = null;
 
-    if (!empty($_GET['start_date'])) {
+    if (!empty($_GET['start_timestamp'])) {
+        $startTimestamp = intval($_GET['start_timestamp']);
+    } elseif (!empty($_GET['start_date'])) {
         $startTime = $_GET['start_time'] ?? '00:00:00';
         if (strlen($startTime) == 5) $startTime .= ':00';
         $startTimestamp = strtotime($_GET['start_date'] . ' ' . $startTime) * 1000;
     }
-    if (!empty($_GET['end_date'])) {
+
+    if (!empty($_GET['end_timestamp'])) {
+        $endTimestamp = intval($_GET['end_timestamp']);
+    } elseif (!empty($_GET['end_date'])) {
         $endTime = $_GET['end_time'] ?? '23:59:59';
         if (strlen($endTime) == 5) $endTime .= ':59';
         $endTimestamp = strtotime($_GET['end_date'] . ' ' . $endTime) * 1000;
@@ -75,6 +80,7 @@ try {
             'fiat' => $order['fiat'],
             'binance_fee' => $order['commission'] ?? 0,
             'createTime' => date('Y-m-d H:i:s', $order['createTime'] / 1000),
+            'createTimestamp' => $order['createTime'],
             'asset' => $order['asset'],
             'status' => $order['orderStatus'], // COMPLETED, CANCELLED, etc.
             'is_imported' => in_array($order['orderNumber'], $imported_ids),
@@ -108,6 +114,7 @@ try {
                 'fiat' => 'USDT',
                 'binance_fee' => $tx['totalPaymentFee'] ?? 0,
                 'createTime' => date('Y-m-d H:i:s', $tx['transactionTime'] / 1000),
+                'createTimestamp' => $tx['transactionTime'],
                 'asset' => 'USDT',
                 'status' => 'COMPLETED',
                 'note' => $tx['note'] ?? ($tx['productName'] ?? ''),
@@ -131,6 +138,7 @@ try {
                 'fiat' => 'USDT',
                 'binance_fee' => 0,
                 'createTime' => date('Y-m-d H:i:s', $dp['insertTime'] / 1000),
+                'createTimestamp' => $dp['insertTime'],
                 'asset' => 'USDT',
                 'status' => $status_map[$dp['status']] ?? 'OTHER',
                 'is_imported' => in_array($dp['txId'] ?: $dp['id'], $imported_ids),
@@ -148,6 +156,7 @@ try {
             if (strpos($utc_time, ' ') !== false && strpos($utc_time, 'UTC') === false) {
                 $utc_time .= ' UTC';
             }
+            $createTimestamp = strtotime($utc_time) * 1000;
 
             $formattedOrders[] = [
                 'source' => 'WITHDRAW',
@@ -158,7 +167,8 @@ try {
                 'totalPrice' => 0,
                 'fiat' => 'USDT',
                 'binance_fee' => $wd['transactionFee'] ?? 0,
-                'createTime' => date('Y-m-d H:i:s', strtotime($utc_time)),
+                'createTime' => date('Y-m-d H:i:s', $createTimestamp / 1000),
+                'createTimestamp' => $createTimestamp,
                 'asset' => 'USDT',
                 'status' => $status_map[$wd['status']] ?? 'OTHER',
                 'is_imported' => in_array($wd['id'], $imported_ids),
@@ -169,10 +179,14 @@ try {
 
     // ترتيب الكل: الأحدث أولاً
     usort($formattedOrders, function($a, $b) {
-        return strtotime($b['createTime']) - strtotime($a['createTime']);
+        return $b['createTimestamp'] - $a['createTimestamp'];
     });
 
-    echo json_encode(['status' => 'success', 'orders' => $formattedOrders]);
+    echo json_encode([
+        'status' => 'success',
+        'orders' => $formattedOrders,
+        'oldest_timestamp' => !empty($formattedOrders) ? min(array_column($formattedOrders, 'createTimestamp')) : null
+    ]);
 
 } catch (Exception $e) {
     echo json_encode(['status' => 'error', 'message' => 'خطأ Binance: ' . $e->getMessage()]);
