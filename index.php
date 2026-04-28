@@ -83,9 +83,10 @@ $daily_out_money_stmt = $pdo->prepare("SELECT SUM(total_fiat_paid) FROM transact
 $daily_out_money_stmt->execute(array_merge([$user_id], $date_params));
 $daily_out_money = $daily_out_money_stmt->fetchColumn() ?: 0;
 
-// د. حساب المخزون المتوفر (Stock) والطبقات
+// د. حساب المخزون المتوفر (Stock) والطبقات (للعرض والمحاكي)
 $remaining_stock = getFIFOStock($pdo, $user_id);
-$current_layers = getFIFOLayers($pdo, $user_id, 2);
+$all_active_layers = getFIFOLayers($pdo, $user_id, 100);
+$current_layers = array_slice($all_active_layers, 0, 2);
 
 // هـ. حسابات النطاق المختار (أرباح ورسوم) بدقة بناءً على FIFO
 $daily_profit_stmt = $pdo->prepare("SELECT SUM(fifo_profit) FROM transactions WHERE user_id = ? AND type = 'sell' AND $date_condition");
@@ -284,43 +285,40 @@ $transactions = $stmt->fetchAll();
             </div>
         </div>
 
-        <!-- نافذة محاكي الأرباح المنبثقة -->
-        <div id="profitCalcModal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-[600]">
-            <div class="glass-card w-full max-w-md p-8 border-2 border-blue-500/30 shadow-2xl text-right">
+        <!-- نافذة محاكي الأرباح المنبثقة المطور -->
+        <div id="profitCalcModal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center p-2 md:p-4 z-[600]">
+            <div class="glass-card w-full max-w-2xl p-4 md:p-8 border-2 border-blue-500/30 shadow-2xl text-right flex flex-col max-h-[90vh]">
                 <div class="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
-                    <h2 class="text-lg font-black text-blue-400 flex items-center gap-3 italic uppercase tracking-widest"><i data-lucide="calculator"></i> محاكي الأرباح المتوقعة</h2>
+                    <h2 class="text-lg font-black text-blue-400 flex items-center gap-3 italic uppercase tracking-widest"><i data-lucide="calculator"></i> محاكي أرباح الطبقات</h2>
                     <button onclick="closeProfitCalculator()" class="bg-slate-800 p-2 rounded-lg text-white hover:bg-rose-500 transition"><i data-lucide="x" class="w-4 h-4"></i></button>
                 </div>
 
-                <p class="text-xs text-slate-500 mb-6 font-bold italic leading-relaxed">
-                    بناءً على مخزونك الحالي (<span class="text-yellow-500"><?php echo number_format($remaining_stock, 2); ?> USDT</span>) ومتوسط شراء (<span class="text-purple-400"><?php echo number_format($avg_buy_price, 2); ?> YER</span>)، إليك الأرباح الصافية المتوقعة عند البيع بأسعار مختلفة:
-                </p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label class="block text-[10px] text-slate-500 font-black uppercase mb-2 tracking-widest">سعر البيع المحاكي (YER)</label>
+                        <input type="number" id="sim_price" value="<?php echo $def_sell; ?>" class="input-dark text-2xl font-black text-yellow-500 text-center" oninput="updateSimulation()">
 
-                <div class="space-y-4">
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800">
-                        <p class="text-[10px] text-slate-500 font-bold uppercase mb-1">بالسعر الافتراضي للإعدادات (<?php echo number_format($def_sell, 2); ?>)</p>
-                        <div class="flex justify-between items-center">
-                            <span class="text-sm font-black <?php echo ($def_sell > $break_even_price) ? 'text-emerald-500' : 'text-rose-500'; ?> tabular-nums"><?php echo number_format(($remaining_stock * $def_sell) - ($layer_cost * ($remaining_stock * 1.001))); ?> YER</span>
-                            <span class="text-[10px] text-slate-500">صافي الربح</span>
+                        <div class="grid grid-cols-3 gap-2 mt-3">
+                            <button onclick="setSimPrice(<?php echo $def_sell; ?>)" class="bg-slate-800 py-2 rounded text-[9px] font-bold text-slate-400 hover:text-white">الافتراضي</button>
+                            <button onclick="setSimPrice(<?php echo round($recommended_price, 1); ?>)" class="bg-emerald-500/10 py-2 rounded text-[9px] font-bold text-emerald-500 hover:bg-emerald-500 hover:text-white">توصية</button>
+                            <button onclick="setSimPrice(<?php echo round($best_price, 1); ?>)" class="bg-yellow-500/10 py-2 rounded text-[9px] font-bold text-yellow-500 hover:bg-yellow-500 hover:text-white">ممتاز</button>
                         </div>
                     </div>
-                    <div class="bg-emerald-500/5 p-4 rounded-xl border border-emerald-500/20">
-                        <p class="text-[10px] text-emerald-500 font-bold uppercase mb-1 tracking-widest">بسعر التوصية (<?php echo number_format($recommended_price, 2); ?>)</p>
-                        <div class="flex justify-between items-center">
-                            <span class="text-sm font-black text-emerald-400 tabular-nums"><?php echo number_format(($remaining_stock * $recommended_price) - ($layer_cost * ($remaining_stock * 1.001))); ?> YER</span>
-                            <span class="text-[10px] text-emerald-600 font-bold">ربح متوسط (0.7%)</span>
-                        </div>
-                    </div>
-                    <div class="bg-yellow-500/5 p-4 rounded-xl border border-yellow-500/20">
-                        <p class="text-[10px] text-yellow-500 font-bold uppercase mb-1 tracking-widest">بأفضل سعر بيع (<?php echo number_format($best_price, 2); ?>)</p>
-                        <div class="flex justify-between items-center">
-                            <span class="text-sm font-black text-yellow-400 tabular-nums"><?php echo number_format(($remaining_stock * $best_price) - ($layer_cost * ($remaining_stock * 1.001))); ?> YER</span>
-                            <span class="text-[10px] text-yellow-600 font-bold">ربح ممتاز (1.2%)</span>
-                        </div>
+                    <div class="bg-blue-500/5 p-4 rounded-2xl border border-blue-500/10 flex flex-col justify-center">
+                        <p class="text-[10px] text-blue-400 font-black uppercase mb-1 text-center">إجمالي الربح المتوقع</p>
+                        <h3 id="sim_total_profit" class="text-3xl font-black text-white text-center tabular-nums">0 <span class="text-xs opacity-40">YER</span></h3>
+                        <p id="sim_total_usd" class="text-center text-xs text-slate-500 font-bold mt-1">$0.00</p>
                     </div>
                 </div>
 
-                <div class="mt-8 text-center"><button onclick="closeProfitCalculator()" class="w-full bg-slate-800 text-white py-4 rounded-xl font-bold text-xs uppercase italic tracking-widest hover:bg-slate-700 transition">فهمت ذلك</button></div>
+                <div class="flex-grow overflow-y-auto custom-scrollbar pr-1 space-y-3" id="sim_layers_container">
+                    <!-- سيتم تعبئة تفاصيل الطبقات هنا عبر JS -->
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-slate-800 text-center">
+                    <p class="text-[9px] text-slate-600 italic font-bold mb-4">ملاحظة: يتم حساب الأرباح بناءً على مطابقة المخزون المتاح مع طبقات الشراء الأقدم (FIFO)</p>
+                    <button onclick="closeProfitCalculator()" class="w-full bg-slate-800 text-white py-4 rounded-xl font-bold text-xs uppercase italic tracking-widest hover:bg-slate-700 transition">إغلاق المحاكي</button>
+                </div>
             </div>
         </div>
         <?php endif; ?>
@@ -1259,8 +1257,75 @@ $transactions = $stmt->fetchAll();
             });
         }
 
-        function openProfitCalculator() { document.getElementById('profitCalcModal').classList.remove('hidden'); }
+        function openProfitCalculator() {
+            document.getElementById('profitCalcModal').classList.remove('hidden');
+            updateSimulation();
+        }
         function closeProfitCalculator() { document.getElementById('profitCalcModal').classList.add('hidden'); }
+
+        const fifoLayers = <?php echo json_encode($all_active_layers); ?>;
+
+        function setSimPrice(price) {
+            document.getElementById('sim_price').value = price;
+            updateSimulation();
+        }
+
+        function updateSimulation() {
+            const simPrice = parseFloat(document.getElementById('sim_price').value) || 0;
+            const container = document.getElementById('sim_layers_container');
+            const totalProfitDisplay = document.getElementById('sim_total_profit');
+            const totalUsdDisplay = document.getElementById('sim_total_usd');
+
+            let totalProfitYER = 0;
+            container.innerHTML = '';
+
+            if (fifoLayers.length === 0) {
+                container.innerHTML = '<div class="text-center py-10 text-slate-500 font-bold italic">لا يوجد مخزون متاح حالياً للمحاكاة.</div>';
+                totalProfitDisplay.innerText = "0 YER";
+                totalUsdDisplay.innerText = "$0.00";
+                return;
+            }
+
+            fifoLayers.forEach((layer, index) => {
+                const qty = parseFloat(layer.remaining_qty);
+                const cost = parseFloat(layer.unit_cost);
+
+                // حساب الربح لهذه الطبقة: (سعر البيع - سعر التكلفة) * الكمية
+                // مع مراعاة عمولة بينانس 0.1% عند البيع
+                const revenue = qty * simPrice;
+                const layerCostTotal = qty * cost * 1.001; // إضافة 0.1% كتغطية لرسوم بينانس
+                const profit = revenue - layerCostTotal;
+
+                totalProfitYER += profit;
+
+                const card = `
+                    <div class="bg-slate-900/40 p-4 rounded-xl border border-slate-800/50 flex justify-between items-center group hover:border-blue-500/30 transition-all">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-[10px] font-black text-slate-500 group-hover:text-blue-400 transition-colors">
+                                ${index + 1}
+                            </div>
+                            <div>
+                                <p class="text-xs font-black text-white tabular-nums">${qty.toFixed(2)} <span class="text-[9px] opacity-40 uppercase">USDT</span></p>
+                                <p class="text-[9px] text-slate-500 font-bold italic">تكلفة الطبقة: ${cost.toFixed(1)} YER</p>
+                            </div>
+                        </div>
+                        <div class="text-left">
+                            <p class="text-sm font-black ${profit >= 0 ? 'text-emerald-500' : 'text-rose-500'} tabular-nums">
+                                ${profit >= 0 ? '+' : ''}${Math.round(profit).toLocaleString()} <span class="text-[9px] opacity-50">YER</span>
+                            </p>
+                            <p class="text-[9px] text-slate-500 font-bold italic">صافي ربح الطبقة</p>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', card);
+            });
+
+            totalProfitDisplay.innerText = `${Math.round(totalProfitYER).toLocaleString()} YER`;
+            const profitUSD = simPrice > 0 ? (totalProfitYER / simPrice) : 0;
+            totalUsdDisplay.innerText = `$${profitUSD.toFixed(2)}`;
+
+            totalProfitDisplay.className = `text-3xl font-black tabular-nums text-center ${totalProfitYER >= 0 ? 'text-emerald-500' : 'text-rose-500'}`;
+        }
 
         function saveMainFormState() {
             localStorage.setItem('enable_backdate', document.getElementById('enable_backdate').checked);
