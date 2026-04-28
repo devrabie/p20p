@@ -1038,14 +1038,14 @@ $transactions = $stmt->fetchAll();
                             </div>
 
                             <!-- القسم الأيسر: الأزرار -->
-                            <div class="flex items-center gap-2 w-full md:w-auto justify-end">
+                            <div class="flex items-center gap-2 w-full md:w-auto justify-end" id="import-btn-container-${order.orderNumber}">
                                 ${isImported ?
                                     '<span class="bg-emerald-500/10 text-emerald-500 px-3 py-1.5 rounded-lg text-[9px] font-black flex items-center gap-1.5 border border-emerald-500/20"><i data-lucide="check-circle" class="w-3 h-3"></i> تم الإضافة</span>' :
                                     (!isCompleted ? '' : (isP2P ?
                                         `<button id="btn-import-${order.orderNumber}" onclick='quickImportOrder(${JSON.stringify(order)})' class="flex-grow md:flex-none bg-yellow-500/10 hover:bg-yellow-500 text-yellow-500 hover:text-black px-4 py-2 rounded-lg text-[9px] font-black transition-all border border-yellow-500/20 flex items-center justify-center gap-1.5 active:scale-95">
                                             <i data-lucide="zap" class="w-3 h-3"></i> إضافة سريعة
                                         </button>` :
-                                        `<button onclick='manualImportToForm(${JSON.stringify(order)})' class="flex-grow md:flex-none bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white px-4 py-2 rounded-lg text-[9px] font-black transition-all border border-blue-500/20 flex items-center justify-center gap-1.5 active:scale-95">
+                                        `<button id="btn-manual-${order.orderNumber}" onclick='manualImportToForm(${JSON.stringify(order)})' class="flex-grow md:flex-none bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white px-4 py-2 rounded-lg text-[9px] font-black transition-all border border-blue-500/20 flex items-center justify-center gap-1.5 active:scale-95">
                                             <i data-lucide="edit-3" class="w-3 h-3"></i> إدراج للنموذج
                                         </button>`
                                     ))
@@ -1061,6 +1061,12 @@ $transactions = $stmt->fetchAll();
 
         function manualImportToForm(order) {
             const modal = document.getElementById('importConfirmModal');
+            const submitBtn = document.getElementById('confirm-submit-btn');
+
+            // إعادة تعيين حالة الزر (لحل مشكلة الدوران العالق)
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i data-lucide="plus-circle" class="w-4 h-4 inline ml-1"></i> إدراج وحفظ';
+
             const type = order.side === 'BUY' ? 'buy' : 'sell';
             const fee = parseFloat(order.binance_fee || 0);
             let amount = parseFloat(order.amount);
@@ -1217,13 +1223,11 @@ $transactions = $stmt->fetchAll();
                     showToast("تم إدراج العملية بنجاح!");
                     document.getElementById('importConfirmModal').classList.add('hidden');
 
-                    // تحديث زر العملية في قائمة بينانس إذا كانت مفتوحة
-                    const importBtn = document.getElementById(`btn-import-${orderId}`) ||
-                                     document.querySelector(`button[onclick*='${orderId}']`);
+                    // تحديث زر العملية في قائمة بينانس باستخدام الـ Container ID الجديد
+                    const container = document.getElementById(`import-btn-container-${orderId}`);
 
-                    if (importBtn) {
-                        const parent = importBtn.parentElement;
-                        parent.innerHTML = '<span class="bg-emerald-500/10 text-emerald-500 px-3 py-1.5 rounded-lg text-[9px] font-black flex items-center gap-1.5 border border-emerald-500/20"><i data-lucide="check-circle" class="w-3 h-3"></i> تم الإضافة</span>';
+                    if (container) {
+                        container.innerHTML = '<span class="bg-emerald-500/10 text-emerald-500 px-3 py-1.5 rounded-lg text-[9px] font-black flex items-center gap-1.5 border border-emerald-500/20"><i data-lucide="check-circle" class="w-3 h-3"></i> تم الإضافة</span>';
                         lucide.createIcons();
                     }
                 } else {
