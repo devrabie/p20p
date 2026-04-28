@@ -38,10 +38,14 @@ try {
     $endTimestamp = null;
 
     if (!empty($_GET['start_date'])) {
-        $startTimestamp = strtotime($_GET['start_date'] . ' 00:00:00') * 1000;
+        $startTime = $_GET['start_time'] ?? '00:00:00';
+        if (strlen($startTime) == 5) $startTime .= ':00';
+        $startTimestamp = strtotime($_GET['start_date'] . ' ' . $startTime) * 1000;
     }
     if (!empty($_GET['end_date'])) {
-        $endTimestamp = strtotime($_GET['end_date'] . ' 23:59:59') * 1000;
+        $endTime = $_GET['end_time'] ?? '23:59:59';
+        if (strlen($endTime) == 5) $endTime .= ':59';
+        $endTimestamp = strtotime($_GET['end_date'] . ' ' . $endTime) * 1000;
     }
 
     $fetch_limit = $settings['binance_fetch_limit'] ?: 10;

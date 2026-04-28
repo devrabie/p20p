@@ -656,15 +656,20 @@ $transactions = $stmt->fetchAll();
                 </div>
 
                 <!-- النطاق المخصص (مخفي افتراضياً) -->
-                <div id="binance_manual_range" class="hidden grid grid-cols-2 gap-2 mt-1 p-2 bg-slate-900/40 border border-slate-800 rounded-lg">
-                    <div>
-                        <label class="block text-[7px] font-black text-slate-500 uppercase mb-0.5">من تاريخ:</label>
-                        <input type="date" id="binance_start_date" class="w-full bg-slate-800 border-none text-white text-[9px] px-2 py-1 rounded focus:ring-1 ring-yellow-500" onchange="syncNavigatorWithInputs(); fetchBinanceOrders();">
+                <div id="binance_manual_range" class="hidden flex flex-col gap-2 mt-1 p-3 bg-slate-900/40 border border-slate-800 rounded-xl shadow-inner">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="space-y-1.5">
+                            <label class="block text-[8px] font-black text-slate-500 uppercase tracking-widest">من تاريخ</label>
+                            <input type="date" id="binance_start_date" class="w-full bg-slate-800 border-none text-white text-[10px] px-2.5 py-1.5 rounded-lg focus:ring-1 ring-yellow-500/50" onchange="syncNavigatorWithInputs(); fetchBinanceOrders();">
+                            <input type="time" id="binance_start_time" value="00:00" class="w-full bg-slate-800 border-none text-slate-400 text-[10px] px-2.5 py-1.5 rounded-lg focus:ring-1 ring-yellow-500/50" onchange="fetchBinanceOrders();">
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="block text-[8px] font-black text-slate-500 uppercase tracking-widest">إلى تاريخ</label>
+                            <input type="date" id="binance_end_date" class="w-full bg-slate-800 border-none text-white text-[10px] px-2.5 py-1.5 rounded-lg focus:ring-1 ring-yellow-500/50" onchange="syncNavigatorWithInputs(); fetchBinanceOrders();">
+                            <input type="time" id="binance_end_time" value="23:59" class="w-full bg-slate-800 border-none text-slate-400 text-[10px] px-2.5 py-1.5 rounded-lg focus:ring-1 ring-yellow-500/50" onchange="fetchBinanceOrders();">
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-[7px] font-black text-slate-500 uppercase mb-0.5">إلى تاريخ:</label>
-                        <input type="date" id="binance_end_date" class="w-full bg-slate-800 border-none text-white text-[9px] px-2 py-1 rounded focus:ring-1 ring-yellow-500" onchange="syncNavigatorWithInputs(); fetchBinanceOrders();">
-                    </div>
+                    <p class="text-[7px] text-slate-600 italic text-center mt-1">تلميح: يمكنك تحديد الوقت بدقة لجلب العمليات المفقودة في أوقات الذروة</p>
                 </div>
             </div>
 
@@ -853,6 +858,8 @@ $transactions = $stmt->fetchAll();
             const container = document.getElementById('binance-orders-container');
             const startDate = document.getElementById('binance_start_date').value;
             const endDate = document.getElementById('binance_end_date').value;
+            const startTime = document.getElementById('binance_start_time').value;
+            const endTime = document.getElementById('binance_end_time').value;
 
             if (startDate && endDate) {
                 const diff = (new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24);
@@ -861,7 +868,7 @@ $transactions = $stmt->fetchAll();
 
             container.innerHTML = '<div class="text-center py-10 text-slate-500 font-bold italic animate-pulse">جاري الاتصال بـ Binance API...</div>';
 
-            fetch(`fetch_binance_orders.php?start_date=${startDate}&end_date=${endDate}`)
+            fetch(`fetch_binance_orders.php?start_date=${startDate}&end_date=${endDate}&start_time=${startTime}&end_time=${endTime}`)
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
