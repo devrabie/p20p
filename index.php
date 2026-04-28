@@ -233,7 +233,7 @@ $transactions = $stmt->fetchAll();
                 <div class="flex justify-center md:justify-start gap-4 mt-3">
                     <div class="text-[10px] md:text-xs text-blue-400 font-bold border-l border-slate-700 pl-4 uppercase tracking-tighter">شراء: <span class="text-white"><?php echo number_format($def_buy, 2); ?></span></div>
                     <div class="text-[10px] md:text-xs text-green-400 font-bold border-l border-slate-700 pl-4 uppercase tracking-tighter">بيع: <span class="text-white"><?php echo number_format($def_sell, 2); ?></span></div>
-                    <button onclick="document.getElementById('settingsModal').classList.remove('hidden')" class="text-yellow-500 hover:scale-125 transition"><i data-lucide="sliders" class="w-4 h-4 md:w-5 md:h-5"></i></button>
+                    <button onclick="openSettingsModal()" class="text-yellow-500 hover:scale-125 transition"><i data-lucide="sliders" class="w-4 h-4 md:w-5 md:h-5"></i></button>
                 </div>
             </div>
 
@@ -588,7 +588,7 @@ $transactions = $stmt->fetchAll();
                     </div>
                 </div>
 
-                <div class="flex gap-4 pt-4"><button type="submit" class="flex-1 btn-primary-glass py-4 font-black uppercase italic">حفظ</button><button type="button" onclick="document.getElementById('settingsModal').classList.add('hidden')" class="flex-1 bg-slate-800 py-4 text-xs font-black text-white uppercase italic">إغلاق</button></div>
+                <div class="flex gap-4 pt-4"><button type="submit" class="flex-1 btn-primary-glass py-4 font-black uppercase italic">حفظ</button><button type="button" onclick="closeSettingsModal()" class="flex-1 bg-slate-800 py-4 text-xs font-black text-white uppercase italic">إغلاق</button></div>
             </form>
         </div>
     </div>
@@ -620,7 +620,7 @@ $transactions = $stmt->fetchAll();
                     <div id="editManualFeeContainer"><label class="block text-xs text-blue-400 mb-2 font-black uppercase italic text-center">رسوم صراف (YER)</label><input type="number" step="any" name="manual_fee" id="edit_manual_fee" class="input-dark text-blue-400 font-black tabular-nums text-center"></div>
                 </div>
 
-                <div class="flex gap-4 pt-4"><button type="submit" id="edit-submit-btn" class="flex-1 btn-primary-glass py-4 font-black text-white uppercase italic">تحديث</button><button type="button" onclick="document.getElementById('editModal').classList.add('hidden')" class="flex-1 bg-slate-800 py-4 text-xs font-black text-white uppercase italic">تراجع</button></div>
+                <div class="flex gap-4 pt-4"><button type="submit" id="edit-submit-btn" class="flex-1 btn-primary-glass py-4 font-black text-white uppercase italic">تحديث</button><button type="button" onclick="closeEditModal()" class="flex-1 bg-slate-800 py-4 text-xs font-black text-white uppercase italic">تراجع</button></div>
             </form>
         </div>
     </div>
@@ -632,7 +632,7 @@ $transactions = $stmt->fetchAll();
                 <h3 class="text-base font-black text-yellow-500 uppercase tracking-widest italic flex items-center gap-2">
                     <i data-lucide="check-square" class="w-5 h-5"></i> تأكيد إدراج العملية
                 </h3>
-                <button onclick="document.getElementById('importConfirmModal').classList.add('hidden')" class="text-slate-500 hover:text-white transition-colors">
+                <button onclick="closeImportConfirmModal()" class="text-slate-500 hover:text-white transition-colors">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
@@ -673,7 +673,7 @@ $transactions = $stmt->fetchAll();
                     <button type="submit" id="confirm-submit-btn" class="flex-1 btn-primary-glass py-4 font-black uppercase italic shadow-lg shadow-indigo-500/20">
                         <i data-lucide="plus-circle" class="w-4 h-4 inline ml-1"></i> إدراج وحفظ
                     </button>
-                    <button type="button" onclick="document.getElementById('importConfirmModal').classList.add('hidden')" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white py-4 text-xs font-black uppercase italic rounded-xl transition-all">
+                    <button type="button" onclick="closeImportConfirmModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white py-4 text-xs font-black uppercase italic rounded-xl transition-all">
                         تراجع
                     </button>
                 </div>
@@ -686,10 +686,10 @@ $transactions = $stmt->fetchAll();
         <div class="glass-card w-full max-w-lg p-6 border-2 border-blue-500/30 shadow-2xl text-left flex flex-col max-h-[80vh]">
             <div class="flex justify-between items-center mb-4 pb-2 border-b border-slate-800">
                 <h3 class="text-xs font-black text-blue-400 uppercase tracking-widest italic">Binance Raw Data (JSON)</h3>
-                <button onclick="document.getElementById('jsonModal').classList.add('hidden')" class="text-slate-500 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+                <button onclick="closeJsonModal()" class="text-slate-500 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
             </div>
             <pre id="json-display" class="bg-black/50 p-4 rounded text-[10px] font-mono text-emerald-400 overflow-auto custom-scrollbar flex-grow dir-ltr text-left"></pre>
-            <button onclick="document.getElementById('jsonModal').classList.add('hidden')" class="mt-4 w-full bg-slate-800 py-2 text-[10px] font-bold text-white rounded">إغلاق</button>
+            <button onclick="closeJsonModal()" class="mt-4 w-full bg-slate-800 py-2 text-[10px] font-bold text-white rounded">إغلاق</button>
         </div>
     </div>
 
@@ -794,13 +794,46 @@ $transactions = $stmt->fetchAll();
         function updateClock() { const clock = document.getElementById('clock'); if (clock) { clock.textContent = new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' }); } }
         setInterval(updateClock, 1000); updateClock();
 
+        function toggleBodyScroll(lock) {
+            if (lock) {
+                document.body.style.overflow = 'hidden';
+            } else {
+                const modalIds = ['reportsModal', 'binanceModal', 'settingsModal', 'editModal', 'profitCalcModal', 'importConfirmModal', 'jsonModal'];
+                const anyOpen = modalIds.some(id => {
+                    const el = document.getElementById(id);
+                    return el && !el.classList.contains('hidden');
+                });
+                if (!anyOpen) {
+                    document.body.style.overflow = '';
+                }
+            }
+        }
+
         function showToast(msg) { const toast = document.getElementById('toast'); document.getElementById('toast-msg').textContent = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 4000); }
 
-        function openReportsModal() { document.getElementById('reportsModal').classList.remove('hidden'); window.location.hash = "reportsModal"; }
-        function closeReportsModal() { document.getElementById('reportsModal').classList.add('hidden'); history.pushState("", document.title, window.location.pathname + window.location.search); }
+        function openReportsModal() {
+            document.getElementById('reportsModal').classList.remove('hidden');
+            window.location.hash = "reportsModal";
+            toggleBodyScroll(true);
+        }
+        function closeReportsModal() {
+            document.getElementById('reportsModal').classList.add('hidden');
+            history.pushState("", document.title, window.location.pathname + window.location.search);
+            toggleBodyScroll(false);
+        }
+
+        function openSettingsModal() {
+            document.getElementById('settingsModal').classList.remove('hidden');
+            toggleBodyScroll(true);
+        }
+        function closeSettingsModal() {
+            document.getElementById('settingsModal').classList.add('hidden');
+            toggleBodyScroll(false);
+        }
 
         function openBinanceModal() {
             document.getElementById('binanceModal').classList.remove('hidden');
+            toggleBodyScroll(true);
             // تعيين تاريخ اليوم كافتراضي للفلتر إذا كان فارغاً
             const startDateInput = document.getElementById('binance_start_date');
             const endDateInput = document.getElementById('binance_end_date');
@@ -874,6 +907,7 @@ $transactions = $stmt->fetchAll();
         }
         function closeBinanceModal() {
             document.getElementById('binanceModal').classList.add('hidden');
+            toggleBodyScroll(false);
         }
 
         function toggleInstructions() {
@@ -888,9 +922,20 @@ $transactions = $stmt->fetchAll();
             }
         }
 
+        function closeImportConfirmModal() {
+            document.getElementById('importConfirmModal').classList.add('hidden');
+            toggleBodyScroll(false);
+        }
+
+        function closeJsonModal() {
+            document.getElementById('jsonModal').classList.add('hidden');
+            toggleBodyScroll(false);
+        }
+
         function showRawJson(data) {
             document.getElementById('json-display').textContent = JSON.stringify(data, null, 4);
             document.getElementById('jsonModal').classList.remove('hidden');
+            toggleBodyScroll(true);
             lucide.createIcons();
         }
 
@@ -1151,6 +1196,7 @@ $transactions = $stmt->fetchAll();
 
         function manualImportToForm(order) {
             const modal = document.getElementById('importConfirmModal');
+            toggleBodyScroll(true);
             const submitBtn = document.getElementById('confirm-submit-btn');
 
             // إعادة تعيين حالة الزر (لحل مشكلة الدوران العالق)
@@ -1262,8 +1308,12 @@ $transactions = $stmt->fetchAll();
         function openProfitCalculator() {
             document.getElementById('profitCalcModal').classList.remove('hidden');
             updateSimulation();
+            toggleBodyScroll(true);
         }
-        function closeProfitCalculator() { document.getElementById('profitCalcModal').classList.add('hidden'); }
+        function closeProfitCalculator() {
+            document.getElementById('profitCalcModal').classList.add('hidden');
+            toggleBodyScroll(false);
+        }
 
         const fifoLayers = <?php echo json_encode($all_active_layers); ?>;
 
@@ -1384,6 +1434,7 @@ $transactions = $stmt->fetchAll();
                 if (data.status === 'success') {
                     showToast("تم إدراج العملية بنجاح!");
                     document.getElementById('importConfirmModal').classList.add('hidden');
+                    toggleBodyScroll(false);
 
                     // تحديث زر العملية في قائمة بينانس باستخدام الـ Container ID الجديد
                     const container = document.getElementById(`import-btn-container-${orderId}`);
@@ -1534,7 +1585,13 @@ $transactions = $stmt->fetchAll();
             }
         }
 
+        function closeEditModal() {
+            document.getElementById('editModal').classList.add('hidden');
+            toggleBodyScroll(false);
+        }
+
         function openEditModal(data) {
+            toggleBodyScroll(true);
             document.getElementById('edit_id').value = data.id;
             document.getElementById('edit_binance_order_id').value = data.binance_order_id || "";
 
