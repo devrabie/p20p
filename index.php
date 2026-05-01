@@ -527,7 +527,9 @@ $transactions = $stmt->fetchAll();
                     </form>
                 </div>
             </div>
+        </div>
 
+        <div class="mt-8">
             <!-- السجل المتسلسل - يظهر ثانياً في الأسفل -->
             <div class="w-full">
                 <div class="glass-card flex flex-col h-[600px] md:h-[750px] shadow-2xl overflow-hidden max-w-4xl mx-auto">
@@ -561,7 +563,6 @@ $transactions = $stmt->fetchAll();
                 </div>
             </div>
         </div>
-    </div>
 
     <!-- نافذة الإعدادات -->
     <div id="settingsModal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-[999]">
