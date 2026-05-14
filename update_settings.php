@@ -23,10 +23,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $api_key = $_POST['binance_api_key'] ?? '';
     $api_secret = $_POST['binance_api_secret'] ?? '';
     $fetch_limit = intval($_POST['binance_fetch_limit'] ?? 10);
+    $auto_sync = isset($_POST['auto_sync_enabled']) ? 1 : 0;
 
-    // تحديث الأسعار
-    $pdo->prepare("UPDATE settings SET default_buy_price = ?, default_sell_price = ?, binance_fetch_limit = ? WHERE user_id = ?")
-        ->execute([$buy_p, $sell_p, $fetch_limit, $user_id]);
+    // تحديث الأسعار والإعدادات الأساسية
+    $pdo->prepare("UPDATE settings SET default_buy_price = ?, default_sell_price = ?, binance_fetch_limit = ?, auto_sync_enabled = ? WHERE user_id = ?")
+        ->execute([$buy_p, $sell_p, $fetch_limit, $auto_sync, $user_id]);
 
     // تحديث مفتاح API إذا تم إدخاله (لا نحدثه إذا كان فارغاً أو عبارة عن نجوم)
     if (!empty($api_key)) {

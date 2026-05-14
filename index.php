@@ -32,6 +32,7 @@ $def_sell = $settings['default_sell_price'] ?? 540;
 $api_key = $settings['binance_api_key'] ?? '';
 $api_secret = $settings['binance_api_secret'] ?? '';
 $fetch_limit = $settings['binance_fetch_limit'] ?? 10;
+$auto_sync_enabled = $settings['auto_sync_enabled'] ?? 0;
 
 // أ. حساب الأرباح التراكمية (YER / USD) بناءً على FIFO
 $profit_stmt = $pdo->prepare("SELECT SUM(fifo_profit) as net_profit FROM transactions WHERE user_id = ? AND type='sell'");
@@ -588,6 +589,10 @@ $transactions = $stmt->fetchAll();
                         <div>
                             <label class="block text-[10px] text-slate-400 mb-2 font-black uppercase italic">عدد العمليات للجلب</label>
                             <input type="number" name="binance_fetch_limit" value="<?php echo $fetch_limit; ?>" class="input-dark text-sm text-center tabular-nums">
+                        </div>
+                        <div class="flex items-center gap-2 p-3 bg-blue-500/5 border border-blue-500/20 rounded-xl mt-4">
+                            <input type="checkbox" id="auto_sync_enabled" name="auto_sync_enabled" value="1" <?php echo $auto_sync_enabled ? 'checked' : ''; ?> class="w-4 h-4 accent-yellow-500 cursor-pointer">
+                            <label for="auto_sync_enabled" class="text-xs text-blue-400 font-bold cursor-pointer italic select-none">تفعيل المزامنة التلقائية لعمليات بينانس (كل ساعة)</label>
                         </div>
                     </div>
                 </div>
