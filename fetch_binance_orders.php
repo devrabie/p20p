@@ -185,6 +185,8 @@ try {
     echo json_encode([
         'status' => 'success',
         'orders' => $formattedOrders,
+        'search_start_timestamp' => $startTimestamp,
+        'search_end_timestamp' => $endTimestamp,
         'oldest_timestamp' => !empty($formattedOrders) ? min(array_column($formattedOrders, 'createTimestamp')) : null
     ]);
 

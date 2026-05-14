@@ -32,6 +32,7 @@ $def_sell = $settings['default_sell_price'] ?? 540;
 $api_key = $settings['binance_api_key'] ?? '';
 $api_secret = $settings['binance_api_secret'] ?? '';
 $fetch_limit = $settings['binance_fetch_limit'] ?? 10;
+$auto_sync_enabled = $settings['auto_sync_enabled'] ?? 0;
 
 // أ. حساب الأرباح التراكمية (YER / USD) بناءً على FIFO
 $profit_stmt = $pdo->prepare("SELECT SUM(fifo_profit) as net_profit FROM transactions WHERE user_id = ? AND type='sell'");
@@ -589,6 +590,10 @@ $transactions = $stmt->fetchAll();
                             <label class="block text-[10px] text-slate-400 mb-2 font-black uppercase italic">عدد العمليات للجلب</label>
                             <input type="number" name="binance_fetch_limit" value="<?php echo $fetch_limit; ?>" class="input-dark text-sm text-center tabular-nums">
                         </div>
+                        <div class="flex items-center gap-2 p-3 bg-blue-500/5 border border-blue-500/20 rounded-xl mt-4">
+                            <input type="checkbox" id="auto_sync_enabled" name="auto_sync_enabled" value="1" <?php echo $auto_sync_enabled ? 'checked' : ''; ?> class="w-4 h-4 accent-yellow-500 cursor-pointer">
+                            <label for="auto_sync_enabled" class="text-xs text-blue-400 font-bold cursor-pointer italic select-none">تفعيل المزامنة التلقائية لعمليات بينانس (كل ساعة)</label>
+                        </div>
                     </div>
                 </div>
 
@@ -792,7 +797,8 @@ $transactions = $stmt->fetchAll();
         const LEDGER_STOCK = <?php echo (float)$remaining_stock; ?>;
         let currentBinanceBalance = 0;
         let hasPendingBuyOrders = false;
-        let oldestBinanceTimestamp = null;
+        let currentSearchStartTimestamp = null;
+        let initialSearchEndTimestamp = null;
         let totalRenderedBinanceOrders = 0;
 
         function updateClock() { const clock = document.getElementById('clock'); if (clock) { clock.textContent = new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' }); } }
@@ -1036,9 +1042,9 @@ $transactions = $stmt->fetchAll();
 
             let url = `fetch_binance_orders.php?start_date=${startDate}&end_date=${endDate}&start_time=${startTime}&end_time=${endTime}`;
 
-            if (isLoadMore && oldestBinanceTimestamp) {
-                // جلب 6 ساعات إضافية أقدم من آخر عملية
-                const newEnd = oldestBinanceTimestamp - 1000;
+            if (isLoadMore && currentSearchStartTimestamp) {
+                // جلب 6 ساعات إضافية أقدم من بداية البحث السابق
+                const newEnd = currentSearchStartTimestamp - 1000;
                 const newStart = newEnd - (6 * 60 * 60 * 1000);
                 url = `fetch_binance_orders.php?start_timestamp=${newStart}&end_timestamp=${newEnd}`;
             } else {
@@ -1049,7 +1055,10 @@ $transactions = $stmt->fetchAll();
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
-                    if (data.oldest_timestamp) oldestBinanceTimestamp = data.oldest_timestamp;
+                    if (data.search_start_timestamp) currentSearchStartTimestamp = data.search_start_timestamp;
+                    if (!isLoadMore && data.search_end_timestamp) {
+                        initialSearchEndTimestamp = data.search_end_timestamp;
+                    }
                     renderBinanceOrders(data.orders, isLoadMore);
                 } else {
                     container.innerHTML = `<div class="text-center py-10 text-rose-500 font-bold italic">${data.message}</div>`;
@@ -1071,11 +1080,10 @@ $transactions = $stmt->fetchAll();
                 // إزالة زر "عرض المزيد" القديم إن وجد
                 const oldLoadMore = document.getElementById('binance-load-more');
                 if (oldLoadMore) oldLoadMore.remove();
-            }
 
-            if (orders.length === 0 && !append) {
-                container.innerHTML = '<div class="text-center py-10 text-slate-500 font-bold italic">لا توجد عمليات حديثة لهذا التاريخ</div>';
-                return;
+                // إزالة رسالة "لا توجد عمليات في هذا النطاق" إن وجدت
+                const emptyMsg = document.getElementById('binance-empty-msg');
+                if (emptyMsg) emptyMsg.remove();
             }
 
             // تحديث العداد
@@ -1098,7 +1106,10 @@ $transactions = $stmt->fetchAll();
                 container.innerHTML = counterHtml;
             }
 
-            orders.forEach((order, index) => {
+            if (orders.length === 0) {
+                container.insertAdjacentHTML('beforeend', `<div id="binance-empty-msg" class="text-center py-6 text-slate-500 font-bold italic text-xs">لا توجد عمليات في النطاق الزمني المحدد</div>`);
+            } else {
+                orders.forEach((order, index) => {
                 const isBuy = order.side === 'BUY';
                 const isCompleted = order.status === 'COMPLETED';
                 const isCancelled = order.status === 'CANCELLED' || order.status === 'FAILED' || order.status === 'CANCELLED_BY_SYSTEM' || order.status === 'SYSTEM_CANCELLED';
@@ -1189,11 +1200,21 @@ $transactions = $stmt->fetchAll();
                     </div>
                 `;
                 container.innerHTML += card;
-            });
-            totalRenderedBinanceOrders += orders.length;
+                });
+                totalRenderedBinanceOrders += orders.length;
+            }
 
-            // إضافة زر "عرض المزيد" في النهاية إذا كان هناك نتائج
-            if (orders.length > 0) {
+            // إضافة زر "عرض المزيد" في النهاية إذا لم نتجاوز الحد المسموح (أسبوع من بداية البحث الأول)
+            let limitReached = false;
+            if (initialSearchEndTimestamp && currentSearchStartTimestamp) {
+                const diffMs = initialSearchEndTimestamp - currentSearchStartTimestamp;
+                const limitMs = 7 * 24 * 60 * 60 * 1000; // أسبوع واحد كحد أقصى للتمرير المستمر
+                if (diffMs > limitMs) {
+                    limitReached = true;
+                }
+            }
+
+            if (!limitReached) {
                 const loadMoreBtn = `
                     <div id="binance-load-more" class="p-4 text-center">
                         <button id="binance-load-more-btn" onclick="fetchBinanceOrders(true)" class="bg-slate-800 hover:bg-slate-700 text-blue-400 px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-700 transition-all active:scale-95 flex items-center justify-center gap-2 mx-auto">
@@ -1202,6 +1223,8 @@ $transactions = $stmt->fetchAll();
                     </div>
                 `;
                 container.insertAdjacentHTML('beforeend', loadMoreBtn);
+            } else {
+                container.insertAdjacentHTML('beforeend', `<div class="text-center py-4 text-rose-500 font-bold italic text-[10px]">تم الوصول للحد الأقصى للبحث المستمر. يرجى تغيير التاريخ للبحث في فترات أقدم.</div>`);
             }
 
             lucide.createIcons();
