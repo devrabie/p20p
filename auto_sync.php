@@ -5,9 +5,9 @@
  * مثال (cPanel): 0 * * * * php /path/to/ledger-pro/auto_sync.php
  */
 
-require_once 'db.php';
-require_once 'binance_api.php';
-require_once 'fifo_helper.php';
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/binance_api.php';
+require_once __DIR__ . '/fifo_helper.php';
 
 // حماية لضمان تشغيله فقط من الـ CLI (Cron)
 if (php_sapi_name() !== 'cli') { die("Access Denied"); }
