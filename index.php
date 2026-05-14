@@ -792,7 +792,8 @@ $transactions = $stmt->fetchAll();
         const LEDGER_STOCK = <?php echo (float)$remaining_stock; ?>;
         let currentBinanceBalance = 0;
         let hasPendingBuyOrders = false;
-        let oldestBinanceTimestamp = null;
+        let currentSearchStartTimestamp = null;
+        let initialSearchEndTimestamp = null;
         let totalRenderedBinanceOrders = 0;
 
         function updateClock() { const clock = document.getElementById('clock'); if (clock) { clock.textContent = new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' }); } }
@@ -1036,9 +1037,9 @@ $transactions = $stmt->fetchAll();
 
             let url = `fetch_binance_orders.php?start_date=${startDate}&end_date=${endDate}&start_time=${startTime}&end_time=${endTime}`;
 
-            if (isLoadMore && oldestBinanceTimestamp) {
-                // جلب 6 ساعات إضافية أقدم من آخر عملية
-                const newEnd = oldestBinanceTimestamp - 1000;
+            if (isLoadMore && currentSearchStartTimestamp) {
+                // جلب 6 ساعات إضافية أقدم من بداية البحث السابق
+                const newEnd = currentSearchStartTimestamp - 1000;
                 const newStart = newEnd - (6 * 60 * 60 * 1000);
                 url = `fetch_binance_orders.php?start_timestamp=${newStart}&end_timestamp=${newEnd}`;
             } else {
@@ -1049,7 +1050,10 @@ $transactions = $stmt->fetchAll();
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
-                    if (data.oldest_timestamp) oldestBinanceTimestamp = data.oldest_timestamp;
+                    if (data.search_start_timestamp) currentSearchStartTimestamp = data.search_start_timestamp;
+                    if (!isLoadMore && data.search_end_timestamp) {
+                        initialSearchEndTimestamp = data.search_end_timestamp;
+                    }
                     renderBinanceOrders(data.orders, isLoadMore);
                 } else {
                     container.innerHTML = `<div class="text-center py-10 text-rose-500 font-bold italic">${data.message}</div>`;
@@ -1071,11 +1075,10 @@ $transactions = $stmt->fetchAll();
                 // إزالة زر "عرض المزيد" القديم إن وجد
                 const oldLoadMore = document.getElementById('binance-load-more');
                 if (oldLoadMore) oldLoadMore.remove();
-            }
 
-            if (orders.length === 0 && !append) {
-                container.innerHTML = '<div class="text-center py-10 text-slate-500 font-bold italic">لا توجد عمليات حديثة لهذا التاريخ</div>';
-                return;
+                // إزالة رسالة "لا توجد عمليات في هذا النطاق" إن وجدت
+                const emptyMsg = document.getElementById('binance-empty-msg');
+                if (emptyMsg) emptyMsg.remove();
             }
 
             // تحديث العداد
@@ -1098,7 +1101,10 @@ $transactions = $stmt->fetchAll();
                 container.innerHTML = counterHtml;
             }
 
-            orders.forEach((order, index) => {
+            if (orders.length === 0) {
+                container.insertAdjacentHTML('beforeend', `<div id="binance-empty-msg" class="text-center py-6 text-slate-500 font-bold italic text-xs">لا توجد عمليات في النطاق الزمني المحدد</div>`);
+            } else {
+                orders.forEach((order, index) => {
                 const isBuy = order.side === 'BUY';
                 const isCompleted = order.status === 'COMPLETED';
                 const isCancelled = order.status === 'CANCELLED' || order.status === 'FAILED' || order.status === 'CANCELLED_BY_SYSTEM' || order.status === 'SYSTEM_CANCELLED';
@@ -1189,11 +1195,21 @@ $transactions = $stmt->fetchAll();
                     </div>
                 `;
                 container.innerHTML += card;
-            });
-            totalRenderedBinanceOrders += orders.length;
+                });
+                totalRenderedBinanceOrders += orders.length;
+            }
 
-            // إضافة زر "عرض المزيد" في النهاية إذا كان هناك نتائج
-            if (orders.length > 0) {
+            // إضافة زر "عرض المزيد" في النهاية إذا لم نتجاوز الحد المسموح (أسبوع من بداية البحث الأول)
+            let limitReached = false;
+            if (initialSearchEndTimestamp && currentSearchStartTimestamp) {
+                const diffMs = initialSearchEndTimestamp - currentSearchStartTimestamp;
+                const limitMs = 7 * 24 * 60 * 60 * 1000; // أسبوع واحد كحد أقصى للتمرير المستمر
+                if (diffMs > limitMs) {
+                    limitReached = true;
+                }
+            }
+
+            if (!limitReached) {
                 const loadMoreBtn = `
                     <div id="binance-load-more" class="p-4 text-center">
                         <button id="binance-load-more-btn" onclick="fetchBinanceOrders(true)" class="bg-slate-800 hover:bg-slate-700 text-blue-400 px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-700 transition-all active:scale-95 flex items-center justify-center gap-2 mx-auto">
@@ -1202,6 +1218,8 @@ $transactions = $stmt->fetchAll();
                     </div>
                 `;
                 container.insertAdjacentHTML('beforeend', loadMoreBtn);
+            } else {
+                container.insertAdjacentHTML('beforeend', `<div class="text-center py-4 text-rose-500 font-bold italic text-[10px]">تم الوصول للحد الأقصى للبحث المستمر. يرجى تغيير التاريخ للبحث في فترات أقدم.</div>`);
             }
 
             lucide.createIcons();
