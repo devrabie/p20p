@@ -246,6 +246,9 @@ $transactions = $stmt->fetchAll();
                     <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> جلب من بينانس
                 </button>
                 <?php endif; ?>
+                <button onclick="toggleManualForm()" class="glass-card bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all border border-purple-500/20 active:scale-95">
+                    <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i> إدخال يدوي
+                </button>
                 <a href="reports.php" class="glass-card bg-white/5 hover:bg-white/10 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all border border-white/10 active:scale-95">
                     <i data-lucide="calendar-days" class="w-3.5 h-3.5 text-blue-400"></i> الأرشيف والتحليل
                 </a>
@@ -499,7 +502,7 @@ $transactions = $stmt->fetchAll();
         </div>
     </div>
 
-        <div id="form-section" class="flex flex-col gap-8">
+        <div id="form-section" class="flex flex-col gap-8" style="display: none;">
             <!-- قسم تسجيل عملية جديدة - يظهر أولاً -->
             <div class="w-full text-right">
                 <div class="glass-card p-6 md:p-8 border-b-4 border-b-yellow-500 shadow-2xl max-w-4xl mx-auto">
@@ -524,7 +527,9 @@ $transactions = $stmt->fetchAll();
                     </form>
                 </div>
             </div>
+        </div>
 
+        <div class="mt-8">
             <!-- السجل المتسلسل - يظهر ثانياً في الأسفل -->
             <div class="w-full">
                 <div class="glass-card flex flex-col h-[600px] md:h-[750px] shadow-2xl overflow-hidden max-w-4xl mx-auto">
@@ -558,7 +563,6 @@ $transactions = $stmt->fetchAll();
                 </div>
             </div>
         </div>
-    </div>
 
     <!-- نافذة الإعدادات -->
     <div id="settingsModal" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-[999]">
@@ -829,6 +833,15 @@ $transactions = $stmt->fetchAll();
         function closeSettingsModal() {
             document.getElementById('settingsModal').classList.add('hidden');
             toggleBodyScroll(false);
+        }
+
+        function toggleManualForm() {
+            const formSection = document.getElementById('form-section');
+            if (formSection.style.display === 'none') {
+                formSection.style.display = 'flex';
+            } else {
+                formSection.style.display = 'none';
+            }
         }
 
         function openBinanceModal() {
@@ -1665,14 +1678,7 @@ $transactions = $stmt->fetchAll();
         // --- نظام السجل المتطور ---
         let rawTransactions = <?php echo json_encode($transactions); ?>;
 
-        // حساب المخزون قبل وبعد لكل عملية (تراكمي عكسي لأن البيانات مرتبة من الأحدث للأقدم)
-        let runningStock = <?php echo $remaining_stock; ?>;
-        rawTransactions.forEach((t, i) => {
-            t.stock_after = runningStock;
-            const impact = (t.type === 'buy') ? parseFloat(t.crypto_amount) : -parseFloat(t.total_crypto_deducted);
-            t.stock_before = runningStock - impact;
-            runningStock = t.stock_before; // تحديث المخزون للعملية التي قبلها (أقدم منها)
-        });
+        // (تم إزالة حساب المخزون قبل وبعد لتخفيف الزحام في السجل)
 
         let filteredTransactions = [...rawTransactions];
         let currentFilter = 'all';
@@ -1725,10 +1731,6 @@ $transactions = $stmt->fetchAll();
                                     <p class="text-sm font-black tabular-nums">${parseFloat(t.crypto_amount).toLocaleString()} <span class="text-[10px] opacity-50">USDT</span></p>
                                     <div class="flex items-center gap-2 mt-0.5">
                                         <p class="text-[9px] text-slate-500 font-bold">${txDate.toLocaleTimeString('ar-YE', timeOptions)}</p>
-                                        <div class="flex items-center gap-1.5 border-r border-slate-700 pr-2 mr-0.5">
-                                            <span class="text-[8px] text-slate-500 font-bold">قبل: <span class="text-slate-400 tabular-nums">${t.stock_before.toFixed(2)}</span></span>
-                                            <span class="text-[8px] text-slate-500 font-bold">بعد: <span class="text-white tabular-nums">${t.stock_after.toFixed(2)}</span></span>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1736,7 +1738,21 @@ $transactions = $stmt->fetchAll();
                                 <p class="text-sm font-black text-white tabular-nums">${parseFloat(t.total_fiat_paid).toLocaleString()} <span class="text-[10px] text-slate-500">YER</span></p>
                                 <div class="flex flex-col items-end">
                                     <p class="text-[9px] text-slate-500 italic">سعر الصرف: ${t.price_per_unit}</p>
-                                    ${t.type === 'sell' ? `<p class="text-[10px] font-black text-emerald-500 tabular-nums mt-0.5"><i data-lucide="trending-up" class="w-2.5 h-2.5 inline ml-0.5"></i>+${parseFloat(t.fifo_profit).toLocaleString()} <span class="text-[8px] opacity-60">ربح</span></p>` : ''}
+                                    ${t.type === 'sell' ? (() => {
+                                        const profit = parseFloat(t.fifo_profit);
+                                        const isProfit = profit >= 0;
+                                        const profitColor = isProfit ? 'text-emerald-500' : 'text-rose-500';
+                                        const profitIcon = isProfit ? 'trending-up' : 'trending-down';
+                                        const profitSign = isProfit ? '+' : '';
+                                        const profitLabel = isProfit ? 'ربح' : 'خسارة';
+
+                                        const unitCost = parseFloat(t.total_crypto_deducted) > 0 ? (parseFloat(t.fifo_cost_basis) / parseFloat(t.total_crypto_deducted)).toFixed(1) : 0;
+
+                                        return `<p class="text-[10px] font-black ${profitColor} tabular-nums mt-0.5" dir="ltr">
+                                                    <i data-lucide="${profitIcon}" class="w-2.5 h-2.5 inline mr-0.5"></i>${profitSign}${profit.toLocaleString()} <span class="text-[8px] opacity-60">YER ${profitLabel}</span>
+                                                </p>
+                                                <p class="text-[9px] text-slate-400 italic mt-0.5">سعر الشراء: ${unitCost}</p>`;
+                                    })() : ''}
                                 </div>
                             </div>
                             <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">

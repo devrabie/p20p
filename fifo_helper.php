@@ -11,6 +11,7 @@ function recalculateFIFO($pdo, $user_id) {
     $transactions = $stmt->fetchAll();
 
     $buy_queue = []; // مخزن طبقات الشراء المتوفرة
+    $deficit = 0;
 
     foreach ($transactions as $tx) {
         if ($tx['type'] == 'buy') {
@@ -18,11 +19,23 @@ function recalculateFIFO($pdo, $user_id) {
             $total_cost = floatval($tx['total_fiat_paid']);
             $unit_cost = ($net_qty > 0) ? ($total_cost / $net_qty) : 0;
 
-            $buy_queue[] = [
-                'id' => $tx['id'],
-                'remaining_qty' => $net_qty,
-                'unit_cost' => $unit_cost
-            ];
+            if ($deficit > 0.0001) {
+                if ($deficit >= $net_qty) {
+                    $deficit -= $net_qty;
+                    $net_qty = 0;
+                } else {
+                    $net_qty -= $deficit;
+                    $deficit = 0;
+                }
+            }
+
+            if ($net_qty > 0.0001) {
+                $buy_queue[] = [
+                    'id' => $tx['id'],
+                    'remaining_qty' => $net_qty,
+                    'unit_cost' => $unit_cost
+                ];
+            }
 
             // في الشراء، التكلفة والربح دائماً 0 - نحدث فقط إذا لزم الأمر لتقليل ضغط الكتابة
             if (floatval($tx['fifo_cost_basis']) != 0 || floatval($tx['fifo_profit']) != 0) {
@@ -63,6 +76,7 @@ function recalculateFIFO($pdo, $user_id) {
                 $settings_stmt->execute([$user_id]);
                 $def_buy = $settings_stmt->fetchColumn() ?: 535;
                 $total_cost_basis += $remaining_to_match * $def_buy;
+                $deficit += $remaining_to_match;
             }
 
             $profit = $sell_fiat - $total_cost_basis;
@@ -103,13 +117,28 @@ function getFIFOLayers($pdo, $user_id, $limit = 2) {
     $transactions = $stmt->fetchAll();
 
     $buy_queue = [];
+    $deficit = 0;
     foreach ($transactions as $tx) {
         if ($tx['type'] == 'buy') {
             $net_qty = round(floatval($tx['crypto_amount']), 4);
-            $buy_queue[] = [
-                'remaining_qty' => $net_qty,
-                'unit_cost' => ($net_qty > 0) ? ($tx['total_fiat_paid'] / $net_qty) : 0
-            ];
+            $original_net_qty = $net_qty;
+
+            if ($deficit > 0.0001) {
+                if ($deficit >= $net_qty) {
+                    $deficit -= $net_qty;
+                    $net_qty = 0;
+                } else {
+                    $net_qty -= $deficit;
+                    $deficit = 0;
+                }
+            }
+
+            if ($net_qty > 0.0001) {
+                $buy_queue[] = [
+                    'remaining_qty' => $net_qty,
+                    'unit_cost' => ($original_net_qty > 0) ? ($tx['total_fiat_paid'] / $original_net_qty) : 0
+                ];
+            }
         } else if ($tx['type'] == 'sell') {
             $remaining_to_match = round(floatval($tx['total_crypto_deducted']), 4);
             while ($remaining_to_match > 0.0001 && count($buy_queue) > 0) {
@@ -120,6 +149,10 @@ function getFIFOLayers($pdo, $user_id, $limit = 2) {
                     $buy_queue[0]['remaining_qty'] -= $remaining_to_match;
                     $remaining_to_match = 0;
                 }
+            }
+
+            if ($remaining_to_match > 0.0001) {
+                $deficit += $remaining_to_match;
             }
         }
     }
